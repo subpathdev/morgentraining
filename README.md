@@ -76,7 +76,9 @@ If the server can't be reached when a round ends, the page keeps the round in th
 flowchart LR
     main["cmd/morgentraining"] --> httpapi
     main --> sqlite
-    main --> planfile
+    main --> importer
+    importer["internal/importer"] -->|"PlanStore interface"| training
+    importer --> planfile
     httpapi["internal/httpapi"] --> oapi["internal/httpapi/oapi"]
     httpapi -->|"Trainer interface"| training
     planfile["internal/planfile"] --> training
@@ -86,13 +88,19 @@ flowchart LR
 | Package | What it does |
 | :--- | :--- |
 | [`internal/training`](internal/training) | The domain: people, versioned plans, rounds, streaks. Types such as `Date` and `StepKind`, the rules as plain functions, and `Service` with the use cases. It defines the `Repository` interface it needs and knows nothing about HTTP, YAML or SQL. |
-| [`internal/sqlite`](internal/sqlite) | Implements `training.Repository` on one SQLite file (migrations, transactions, backup). |
+| [`internal/sqlite`](internal/sqlite) | Implements `training.Repository` on one SQLite file (migrations, transactions, backup). Its own row and column types in `rows.go` define what is stored. |
 | [`internal/planfile`](internal/planfile) | Reads the plan and people YAML files into domain values. Unknown fields are an error. |
+| [`internal/importer`](internal/importer) | Turns plan and people files into service calls, for the `import` command and for seeding an empty database. Depends on a small `PlanStore` interface. |
 | [`internal/httpapi`](internal/httpapi) | HTTP handlers. They depend only on the small `Trainer` interface and map between domain and wire types. |
 | [`internal/httpapi/oapi`](internal/httpapi/oapi) | Generated from the spec. Not edited by hand. |
-| [`cmd/morgentraining`](cmd/morgentraining) | Wiring and the `serve`, `import` and `backup` commands. |
+| [`cmd/morgentraining`](cmd/morgentraining) | Wiring: an `app` struct holds the parts, and `serve`, `import` and `backup` are its methods. |
 
-Interfaces exist only at those two boundaries: handlers → service, service → storage. Tests follow the same split: pure rules are table-tested, handlers are tested against a fake service (with every response checked against the spec), the service is tested against a real SQLite file, and one end-to-end test wires everything together.
+Two rules keep the layers independent:
+
+- **Each outer layer owns its types and maps them.** The HTTP JSON types (`oapi`), the YAML documents (`planfile`) and the database rows (`sqlite/rows.go`) are separate types with explicit mapping to and from the domain. The API, the file format and the stored format can each change without touching the domain, and the other way round. The domain types are the shared core and are not copied.
+- **Interfaces are defined by the code that uses them**, and only at layer boundaries: `httpapi.Trainer` and `importer.PlanStore` (implemented by `training.Service`) and `training.Repository` (implemented by `sqlite.DB`). There is no interface per type.
+
+Tests follow the same split: pure rules are table-tested; handlers and the importer are tested against fakes (with every HTTP response checked against the spec); the stored format is pinned in the SQLite tests; the service is tested against a real SQLite file, and one end-to-end test wires everything together.
 
 ## Container
 

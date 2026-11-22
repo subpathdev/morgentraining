@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -14,33 +13,28 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/subpathdev/morgentraining/internal/httpapi"
-	"github.com/subpathdev/morgentraining/internal/sqlite"
-	"github.com/subpathdev/morgentraining/internal/training"
-	"github.com/subpathdev/morgentraining/seed"
-	"github.com/subpathdev/morgentraining/web"
 )
 
 // TestEndToEnd wires the real pieces together: embedded seed, SQLite, service,
 // HTTP handler and page. The details are tested in each package.
 func TestEndToEnd(t *testing.T) {
 	ctx := context.Background()
-	db, err := sqlite.Open(filepath.Join(t.TempDir(), "e2e.db"))
+	cfg := config{
+		DBPath:   filepath.Join(t.TempDir(), "e2e.db"),
+		TimeZone: "UTC",
+		Stdout:   io.Discard,
+		Stderr:   io.Discard,
+		Now:      func() time.Time { return time.Date(2026, 11, 22, 6, 0, 0, 0, time.UTC) },
+	}
+	a, err := newApp(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
-	now := func() time.Time { return time.Date(2026, 11, 22, 6, 0, 0, 0, time.UTC) }
-	svc := training.NewService(db, time.UTC, training.WithClock(now))
-	log := slog.New(slog.DiscardHandler)
-	if err := seedIfEmpty(ctx, svc, seed.Files, log); err != nil {
+	defer a.Close()
+	if _, err := a.handler(ctx); err != nil { // first start seeds
 		t.Fatal(err)
 	}
-	if err := seedIfEmpty(ctx, svc, seed.Files, log); err != nil { // second start: no-op
-		t.Fatal(err)
-	}
-	h, err := httpapi.New(svc, httpapi.Options{Static: web.Files})
+	h, err := a.handler(ctx) // second start: seeding is a no-op
 	if err != nil {
 		t.Fatal(err)
 	}
