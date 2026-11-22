@@ -20,16 +20,25 @@ import (
 //go:embed schema.sql
 var schemaV1 string
 
-// DB is an open database. It implements training.Repository.
-type DB struct {
+// DB is an open database: the storage the domain needs plus what operations need.
+// The implementation is unexported; Open returns it as a DB.
+type DB interface {
+	training.Repository
+
+	// Backup writes a consistent copy of the database to target, which must not exist yet.
+	Backup(ctx context.Context, target string) error
+	Close() error
+}
+
+type db struct {
 	repo
 	sql *sql.DB
 }
 
-var _ training.Repository = (*DB)(nil)
+var _ DB = (*db)(nil)
 
 // Open opens (or creates) the database file and brings the schema up to date.
-func Open(path string) (*DB, error) {
+func Open(path string) (DB, error) {
 	dsn := "file:" + path + "?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)"
 	conn, err := sql.Open("sqlite", dsn)
 	if err != nil {
@@ -41,14 +50,13 @@ func Open(path string) (*DB, error) {
 		conn.Close()
 		return nil, fmt.Errorf("migrate %s: %w", path, err)
 	}
-	return &DB{repo: repo{q: conn, conn: conn}, sql: conn}, nil
+	return &db{repo: repo{q: conn, conn: conn}, sql: conn}, nil
 }
 
-func (db *DB) Close() error { return db.sql.Close() }
+func (d *db) Close() error { return d.sql.Close() }
 
-// Backup writes a consistent copy of the database to path, which must not exist yet.
-func (db *DB) Backup(ctx context.Context, path string) error {
-	_, err := db.sql.ExecContext(ctx, "VACUUM INTO ?", path)
+func (d *db) Backup(ctx context.Context, target string) error {
+	_, err := d.sql.ExecContext(ctx, "VACUUM INTO ?", target)
 	return err
 }
 

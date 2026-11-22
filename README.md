@@ -88,7 +88,7 @@ flowchart LR
 | Package | What it does |
 | :--- | :--- |
 | [`internal/training`](internal/training) | The domain: people, versioned plans, rounds, streaks. Types such as `Date` and `StepKind`, the rules as plain functions, and `Service` with the use cases. It defines the `Repository` interface it needs and knows nothing about HTTP, YAML or SQL. |
-| [`internal/sqlite`](internal/sqlite) | Implements `training.Repository` on one SQLite file (migrations, transactions, backup). Its own row and column types in `rows.go` define what is stored. |
+| [`internal/sqlite`](internal/sqlite) | `Open` returns a `sqlite.DB` interface (`training.Repository` plus `Backup` and `Close`); the implementation is unexported. Migrations, transactions, backup. Its own row and column types in `rows.go` define what is stored. |
 | [`internal/planfile`](internal/planfile) | Reads the plan and people YAML files into domain values. Unknown fields are an error. |
 | [`internal/importer`](internal/importer) | Turns plan and people files into service calls, for the `import` command and for seeding an empty database. Depends on a small `PlanStore` interface. |
 | [`internal/httpapi`](internal/httpapi) | HTTP handlers. They depend only on the small `Trainer` interface and map between domain and wire types. |
@@ -98,7 +98,7 @@ flowchart LR
 Two rules keep the layers independent:
 
 - **Each outer layer owns its types and maps them.** The HTTP JSON types (`oapi`), the YAML documents (`planfile`) and the database rows (`sqlite/rows.go`) are separate types with explicit mapping to and from the domain. The API, the file format and the stored format can each change without touching the domain, and the other way round. The domain types are the shared core and are not copied.
-- **Interfaces are defined by the code that uses them**, and only at layer boundaries: `httpapi.Trainer` and `importer.PlanStore` (implemented by `training.Service`) and `training.Repository` (implemented by `sqlite.DB`). There is no interface per type.
+- **Layers talk through interfaces.** The consumer defines what it needs: `httpapi.Trainer` and `importer.PlanStore` (implemented by `training.Service`) and `training.Repository`. An implementation package can export an interface that embeds those and keep its struct unexported, like `sqlite.DB`, so nothing outside depends on its internals. A new capability gets a new or composed interface rather than growing an existing one.
 
 Tests follow the same split: pure rules are table-tested; handlers and the importer are tested against fakes (with every HTTP response checked against the spec); the stored format is pinned in the SQLite tests; the service is tested against a real SQLite file, and one end-to-end test wires everything together.
 

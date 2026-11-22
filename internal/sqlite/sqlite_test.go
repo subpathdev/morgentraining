@@ -11,14 +11,15 @@ import (
 	"github.com/subpathdev/morgentraining/internal/training"
 )
 
-func open(t *testing.T, path string) *DB {
+// open returns the concrete *db, so tests in this package can also read raw columns.
+func open(t *testing.T, path string) *db {
 	t.Helper()
-	db, err := Open(path)
+	d, err := Open(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { db.Close() })
-	return db
+	t.Cleanup(func() { d.Close() })
+	return d.(*db)
 }
 
 func TestReopenKeepsData(t *testing.T) {

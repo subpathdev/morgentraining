@@ -28,7 +28,7 @@ type config struct {
 
 // app holds the wired-up parts. Each command is a method on it.
 type app struct {
-	db       *sqlite.DB
+	store    sqlite.DB
 	svc      *training.Service
 	importer *importer.Importer
 	log      *slog.Logger
@@ -40,7 +40,7 @@ func newApp(cfg config) (*app, error) {
 	if err != nil {
 		return nil, fmt.Errorf("time zone: %w", err)
 	}
-	db, err := sqlite.Open(cfg.DBPath)
+	store, err := sqlite.Open(cfg.DBPath)
 	if err != nil {
 		return nil, err
 	}
@@ -48,12 +48,12 @@ func newApp(cfg config) (*app, error) {
 	if cfg.Now != nil {
 		opts = append(opts, training.WithClock(cfg.Now))
 	}
-	svc := training.NewService(db, loc, opts...)
+	svc := training.NewService(store, loc, opts...)
 	log := slog.New(slog.NewTextHandler(cfg.Stderr, nil))
-	return &app{db: db, svc: svc, importer: importer.New(svc, log), log: log, stdout: cfg.Stdout}, nil
+	return &app{store: store, svc: svc, importer: importer.New(svc, log), log: log, stdout: cfg.Stdout}, nil
 }
 
-func (a *app) Close() error { return a.db.Close() }
+func (a *app) Close() error { return a.store.Close() }
 
 // handler seeds an empty database and returns the HTTP handler.
 func (a *app) handler(ctx context.Context) (http.Handler, error) {
@@ -106,5 +106,5 @@ func (a *app) importFiles(ctx context.Context, names []string) error {
 }
 
 func (a *app) backup(ctx context.Context, target string) error {
-	return a.db.Backup(ctx, target)
+	return a.store.Backup(ctx, target)
 }
