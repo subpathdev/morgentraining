@@ -1,0 +1,8 @@
+# Generates the wire types and a strict, typed server interface for net/http
+# from api/openapi.yaml. This package holds generated code only.
+package: oapi
+output: oapi.gen.go
+generate:
+  models: true
+  std-http-server: true
+  strict-server: true

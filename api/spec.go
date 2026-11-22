@@ -1,5 +1,5 @@
 // Package apispec embeds the OpenAPI description, the source of truth for the HTTP API.
-// The server code in internal/api is generated from it (see internal/api/generate.go).
+// internal/httpapi/oapi is generated from it (see its generate.go).
 package apispec
 
 import _ "embed"

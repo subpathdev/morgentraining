@@ -1,7 +1,0 @@
-# Generates types and a strict, typed server interface for net/http from api/openapi.yaml.
-package: api
-output: oapi.gen.go
-generate:
-  models: true
-  std-http-server: true
-  strict-server: true
