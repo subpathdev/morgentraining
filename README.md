@@ -1,0 +1,80 @@
+# Morgentraining
+
+A short morning workout timer for the family: a sun ring that fills block by block, with tones, vibration, rests, and the screen kept on. Each person has their own plan and their own streak. One small Go service serves the page and a JSON API and keeps everything in a single SQLite file.
+
+It is meant for a home network. There is **no login**: anyone who can reach the page can pick any person. Put it behind something that limits access (a LAN-only gateway, later an OIDC proxy).
+
+## Run locally
+
+```bash
+go run . serve -addr 127.0.0.1:8080 -db morgentraining.db
+```
+
+Open <http://127.0.0.1:8080>. On first start with an empty database, the plans and people in [`seed/`](seed) are loaded.
+
+> The browser only keeps the screen on (Wake Lock API) on HTTPS pages or `localhost`. On a phone, serve it over HTTPS.
+
+## Plans
+
+A plan is a list of **blocks** (one item in the list and one segment of the ring). Each block has **steps** that point to exercises in a shared library. Exercise kinds: `exercise`, `rest` (a short break inside a block) and `breath` (shows breathe in / breathe out). Names and cues are given per language (`de`, `en`, …), and each person sees their own language, falling back to German, then English.
+
+See [`seed/plan-morgen-5.yaml`](seed/plan-morgen-5.yaml) for the format. To change a plan, edit the YAML and import it:
+
+```bash
+morgentraining import -db morgentraining.db my-plan.yaml
+```
+
+- Changed content saves a **new plan version**. Unchanged content is a no-op.
+- Saved versions never change. Every finished round points to the version it used, so history stays exact when the routine grows.
+- People follow the newest version of their assigned plan.
+
+People and their plans live in a people file ([`seed/people.yaml`](seed/people.yaml)). A changed `plan:` applies from the day of the import.
+
+## Data model
+
+```mermaid
+classDiagram
+    direction LR
+    Plan "1" *-- "1..*" PlanVersion
+    PlanVersion "1" *-- "1..*" Block
+    Block "1" *-- "1..*" Step
+    Step "0..*" --> "1" Exercise
+    Person "1" --> "0..*" Assignment
+    Assignment "0..*" --> "1" Plan
+    Person "1" --> "0..*" Round
+    Round "0..*" --> "1" PlanVersion
+```
+
+Schema: [`internal/store/schema.sql`](internal/store/schema.sql).
+
+## API
+
+| Method and path | What it does |
+| :--- | :--- |
+| `GET /api/people` | People to choose from |
+| `GET /api/people/{key}/today?date=YYYY-MM-DD` | Today's plan for that person (in their language) and their stats |
+| `POST /api/people/{key}/rounds` | Record a round: `{"planVersionId":1,"date":"2026-11-22","completed":true,"skippedSteps":[]}` |
+| `GET /healthz` | Liveness |
+
+If the server can't be reached when a round ends, the page keeps the round in the browser and sends it on the next load.
+
+## Container
+
+```bash
+docker build -t morgentraining .
+docker run -p 8080:8080 -v morgentraining:/data morgentraining
+```
+
+Settings (environment): `MT_ADDR` (default `:8080`), `MT_DB` (`/data/morgentraining.db` in the image), `MT_TZ` (`Europe/Berlin`, used for "today" when the page doesn't send a date). The image runs as uid 65532, so the volume must be writable for that user.
+
+Run exactly **one** instance per database file. Back up with a consistent copy while it runs:
+
+```bash
+morgentraining backup -db /data/morgentraining.db /backup/morgentraining-$(date +%F).db
+```
+
+## Development
+
+```bash
+go vet ./... && go test ./...
+```

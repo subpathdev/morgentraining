@@ -1,0 +1,86 @@
+# Jan's 5-minute morning routine, taken over from the "5 Minuten morgens" page (2026-11-22).
+# To change the routine: edit this file (or a copy) and import it again:
+#   morgentraining import -db morgentraining.db seed/plan-morgen-5.yaml
+# Changed content becomes a new plan version; earlier rounds keep pointing to their version.
+plan: morgen-5
+names: {de: 5 Minuten morgens, en: 5 morning minutes}
+createdBy: jan
+
+exercises:
+  - key: warmup
+    names: {de: Aufwärmen, en: Warm-up}
+    cues:
+      de: Auf der Stelle marschieren, Knie locker anheben, Arme groß kreisen lassen.
+      en: March on the spot, lift your knees loosely, circle your arms wide.
+  - key: half-squat
+    names: {de: Halbe Kniebeugen, en: Half squats}
+    cues:
+      de: Langsam runter, zügig hoch. Oberschenkel bleiben schräg, Knie zeigen zu den Fußspitzen.
+      en: Down slowly, up quickly. Thighs stay angled, knees point over your toes.
+  - key: push-up
+    names: {de: Liegestütze, en: Push-ups}
+    cues:
+      de: Auf den Knien oder ganz normal. Körper gerade wie ein Brett, Bauch fest.
+      en: On your knees or full. Body straight as a board, core tight.
+    variants:
+      knees: {de: auf den Knien, en: on your knees}
+      full: {de: klassisch, en: full}
+  - key: wall-sit
+    names: {de: Wandsitzen, en: Wall sit}
+    cues:
+      de: Rücken an die Wand, Oberschenkel schräg, nicht waagerecht. Halten und atmen.
+      en: Back against the wall, thighs angled, not level. Hold and breathe.
+  - key: short-break
+    kind: rest
+    names: {de: Kurze Pause, en: Short break}
+    cues:
+      de: Aufstehen, Beine ausschütteln.
+      en: Stand up, shake out your legs.
+  - key: plank
+    names: {de: Unterarmstütz, en: Plank}
+    cues:
+      de: Ellbogen unter den Schultern, Körper eine Linie. Nicht die Luft anhalten.
+      en: Elbows under your shoulders, body in one line. Don't hold your breath.
+  - key: breathing
+    kind: breath
+    names: {de: Atmen, en: Breathing}
+
+blocks:
+  - names: {de: Aufwärmen, en: Warm-up}
+    summary:
+      de: Auf der Stelle marschieren und die Arme kreisen lassen.
+      en: March on the spot and circle your arms.
+    steps:
+      - {exercise: warmup, seconds: 60}
+  - names: {de: Halbe Kniebeugen, en: Half squats}
+    summary:
+      de: Langsam runter, zügig hoch, die Oberschenkel bleiben schräg.
+      en: Down slowly, up quickly, thighs stay angled.
+    steps:
+      - {exercise: half-squat, seconds: 60}
+  - names: {de: Liegestütze, en: Push-ups}
+    summary:
+      de: Auf den Knien oder ganz normal, je nach Kraft.
+      en: On your knees or full, as strength allows.
+    steps:
+      - {exercise: push-up, seconds: 60}
+  - names: {de: Wandsitzen, en: Wall sit}
+    summary:
+      de: 2 × 25 Sekunden mit kurzer Pause, die Oberschenkel bleiben schräg.
+      en: 2 × 25 seconds with a short break, thighs stay angled.
+    steps:
+      - exercise: wall-sit
+        seconds: 25
+        names: {de: Wandsitzen 1 von 2, en: Wall sit 1 of 2}
+      - {exercise: short-break, seconds: 10}
+      - exercise: wall-sit
+        seconds: 25
+        names: {de: Wandsitzen 2 von 2, en: Wall sit 2 of 2}
+        cues: {de: Noch einmal runter an die Wand. Gleich hast du es., en: Back down against the wall. Almost there.}
+  - names: {de: Unterarmstütz und Atmen, en: Plank and breathing}
+    summary:
+      de: 30 Sekunden Plank, dann tief und ruhig durchatmen.
+      en: 30 seconds of plank, then breathe deeply and calmly.
+    steps:
+      - {exercise: plank, seconds: 30}
+      - {exercise: breathing, seconds: 30}

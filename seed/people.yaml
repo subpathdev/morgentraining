@@ -1,0 +1,7 @@
+# People and the plan each one follows. Importing this again updates names and languages;
+# a changed plan applies from the day of the import.
+people:
+  - key: jan
+    name: Jan
+    language: de
+    plan: morgen-5

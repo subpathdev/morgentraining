@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#ff6a2b">
+<title>Morgentraining</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<style>
+/* Based on the "5 Minuten morgens" page: a sun ring that fills block by block, peach morning sky, night-blue ink.
+   No external requests: system fonts only, so nothing leaves the home network. */
+:root{color-scheme:light dark;
+--bg:light-dark(#ffe8d4,#14173a);--ink:light-dark(#1c1a3d,#fbeee2);--soft:light-dark(#5b5470,#b9b3d4);
+--card:light-dark(#fff6ee,#1e2250);--line:light-dark(#f2cdb0,#2f3470);--sun:#ff6a2b;--sun2:light-dark(#ffb27a,#ff8f55);
+--track:light-dark(#f6d3b8,#262a5c);--ok:light-dark(#2d7a5a,#7fd6ad);--warn:light-dark(#9a4a00,#ffc48a)}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;overflow-x:clip}
+.wrap{max-width:560px;margin:0 auto;padding:clamp(20px,4vw,40px) max(5vw,16px) 48px}
+header{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap}
+h1{font-size:clamp(26px,6vw,36px);line-height:1.05;margin:0;font-weight:800;text-wrap:balance}
+.who{font-size:14px;color:var(--soft);display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+.who b{color:var(--ink)}
+.linkbtn{min-height:0;min-width:0;padding:0;border:0;background:none;color:var(--soft);text-decoration:underline;font-size:14px}
+.streak{font-size:14px;color:var(--soft);margin-top:6px}
+.streak b{color:var(--ink)}
+.sunbox{position:relative;width:min(100%,400px);aspect-ratio:1;margin:20px auto 8px}
+.sunbox svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.center{position:absolute;inset:16%;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
+.lbl{font-size:14px;color:var(--soft)}
+.name{font-size:clamp(20px,5vw,26px);font-weight:700;line-height:1.15;margin-top:2px;text-wrap:balance}
+.time{font-size:clamp(56px,17vw,92px);font-weight:800;line-height:1;margin:6px 0 2px;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.next{font-size:13px;color:var(--soft);min-height:20px}
+.cue{text-align:center;font-size:17px;min-height:54px;margin:4px auto 0;max-width:30em;text-wrap:balance}
+.cue.breath{font-size:20px;font-weight:700;color:var(--sun)}
+.cue.rest{color:var(--ok);font-weight:700}
+.ctl{display:flex;gap:10px;justify-content:center;margin:18px 0 6px}
+button{font:inherit;color:inherit;min-height:48px;min-width:48px;border-radius:999px;border:1.5px solid var(--line);background:var(--card);cursor:pointer;padding:0 18px;display:inline-flex;align-items:center;justify-content:center;gap:8px}
+button:focus-visible{outline:3px solid var(--sun);outline-offset:2px}
+button.main{background:var(--sun);border-color:var(--sun);color:#fff;font-weight:700;min-width:150px;font-size:18px}
+button svg{width:20px;height:20px}
+.opts{display:flex;gap:18px;justify-content:center;flex-wrap:wrap;font-size:14px;color:var(--soft);margin-top:6px}
+.opts label{display:inline-flex;align-items:center;gap:8px;min-height:44px;cursor:pointer}
+.opts input{width:20px;height:20px;accent-color:var(--sun)}
+select{font:inherit;font-size:16px;color:var(--ink);background:var(--card);border:1.5px solid var(--line);border-radius:10px;min-height:44px;padding:0 10px}
+select:focus-visible{outline:3px solid var(--sun);outline-offset:2px}
+ol{list-style:none;padding:0;margin:28px 0 0;border-top:1.5px solid var(--line)}
+li{display:grid;grid-template-columns:32px minmax(0,1fr) auto;gap:12px;align-items:start;padding:14px 0;border-bottom:1.5px solid var(--line)}
+li .dot{width:28px;height:28px;border-radius:50%;border:2px solid var(--line);display:grid;place-items:center;font-size:13px;font-weight:700;color:var(--soft)}
+li.on .dot{background:var(--sun);border-color:var(--sun);color:#fff}
+li.done .dot{background:var(--ok);border-color:var(--ok);color:var(--bg)}
+li h3{margin:2px 0 2px;font-size:17px;font-weight:700}
+li p{margin:0;font-size:14px;color:var(--soft)}
+li.done h3{color:var(--soft)}
+li .d{font-size:14px;color:var(--soft);white-space:nowrap;padding-top:4px}
+.tip{font-size:13px;color:var(--soft);margin-top:20px;text-align:center}
+.msg{font-size:14px;color:var(--warn);text-align:center;min-height:0;margin:8px 0 0}
+.people{display:grid;gap:12px;margin-top:28px}
+.people button{min-height:64px;font-size:20px;font-weight:700;border-radius:18px;justify-content:flex-start;padding:0 22px}
+[hidden]{display:none!important}
+@media (prefers-reduced-motion:no-preference){#rays{transition:opacity .6s}.seg{transition:stroke-dashoffset .9s linear}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <section id="pick" hidden>
+    <h1 id="pickTitle">Wer trainiert?</h1>
+    <div class="people" id="people"></div>
+    <p class="msg" id="pickMsg"></p>
+  </section>
+
+  <section id="run" hidden>
+    <header>
+      <h1 id="title">Morgentraining</h1>
+      <div class="who"><b id="who"></b><button class="linkbtn" id="switch">Wechseln</button></div>
+    </header>
+    <div class="streak" id="streak"></div>
+
+    <div class="sunbox" aria-hidden="true">
+      <svg id="sun" viewBox="0 0 400 400"></svg>
+      <div class="center">
+        <div class="lbl" id="lbl"></div>
+        <div class="name" id="name"></div>
+        <div class="time" id="time"></div>
+        <div class="next" id="next"></div>
+      </div>
+    </div>
+    <div class="cue" id="cue" aria-live="polite"></div>
+    <p class="msg" id="msg"></p>
+
+    <div class="ctl">
+      <button id="back"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6v12M6 12l9-6v12z"/></svg></button>
+      <button id="go" class="main"></button>
+      <button id="skip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6v12M18 12l-9-6v12z"/></svg></button>
+    </div>
+    <div class="opts">
+      <label><input type="checkbox" id="optSound" checked> <span id="tSound"></span></label>
+      <label><input type="checkbox" id="optVib" checked> <span id="tVib"></span></label>
+      <label><input type="checkbox" id="optPrep" checked> <span id="tPrep"></span></label>
+    </div>
+    <div class="opts">
+      <label><span id="tRest"></span>
+        <select id="optRest"><option value="0" id="tNone"></option><option value="10">10 s</option><option value="15">15 s</option><option value="20">20 s</option><option value="30">30 s</option></select>
+      </label>
+      <label><span id="tVol"></span>
+        <select id="optVol"><option value="normal" id="tVolN"></option><option value="laut" id="tVolL"></option><option value="sehrlaut" id="tVolXL"></option></select>
+      </label>
+    </div>
+    <p class="tip" id="restNote" hidden></p>
+
+    <ol id="list"></ol>
+    <p class="tip" id="tip"></p>
+  </section>
+</div>
+
+<script>
+{
+const T={
+ de:{who:"Wer trainiert?",switch:"Wechseln",ready:"Bereit?",soon:"Gleich geht's los",getReady:"Mach dich bereit",morning:"Guten Morgen",
+  first:"Als Erstes: ",next:"Danach: ",nextDone:"Danach: geschafft",shake:"Stell dich hin, schüttle kurz die Arme aus.",
+  intro:n=>`${n} ${n===1?"Übung":"Übungen"}. Tippe auf Start.`,pause:"Pause",recover:"Kurz erholen",exOf:(a,b)=>`Übung ${a} von ${b}`,
+  in:"Einatmen … tief durch die Nase",out:"Ausatmen … langsam durch den Mund",done:"Geschafft",strong:"Starker Start in den Tag",
+  water:"Trink ein Glas Wasser. Bis morgen!",again:"Nochmal",start:"Start",pauseBtn:"Pause",resume:"Weiter",
+  restCue:n=>`Gleich: ${n}. Kurz durchatmen, Position einnehmen.`,none0:"Noch keine Runde gespeichert",
+  streak:(n,t)=>`<b>${n}</b> ${n===1?"Tag":"Tage"} in Folge · ${t} gesamt`,total:t=>`${t} ${t===1?"Tag":"Tage"} gesamt`,
+  sound:"Töne",vib:"Vibration",prep:"5 s Vorlauf",rest:"Pause zwischen Übungen",none:"keine",vol:"Töne",volN:"normal",volL:"laut",volXL:"sehr laut",
+  restNote:"Die neue Pausenlänge gilt ab der nächsten Runde.",tip:"Leertaste startet und pausiert. Lass den Bildschirm an, damit der Timer weiterläuft.",
+  back:"Zurück zur vorherigen Übung",skip:"Zur nächsten Übung",min:"Min",offline:"Runde lokal gemerkt, sie wird später übertragen.",
+  noServer:"Server nicht erreichbar. Bist du im WLAN zu Hause?",noPlan:"Für dich ist heute kein Plan eingetragen."},
+ en:{who:"Who's training?",switch:"Switch",ready:"Ready?",soon:"Here we go",getReady:"Get ready",morning:"Good morning",
+  first:"First: ",next:"Next: ",nextDone:"Next: done",shake:"Stand up and shake out your arms.",
+  intro:n=>`${n} ${n===1?"exercise":"exercises"}. Tap Start.`,pause:"Rest",recover:"Catch your breath",exOf:(a,b)=>`Exercise ${a} of ${b}`,
+  in:"Breathe in … deeply through your nose",out:"Breathe out … slowly through your mouth",done:"Done",strong:"A strong start to the day",
+  water:"Drink a glass of water. See you tomorrow!",again:"Again",start:"Start",pauseBtn:"Pause",resume:"Resume",
+  restCue:n=>`Next: ${n}. Breathe, get into position.`,none0:"No rounds saved yet",
+  streak:(n,t)=>`<b>${n}</b> ${n===1?"day":"days"} in a row · ${t} total`,total:t=>`${t} ${t===1?"day":"days"} total`,
+  sound:"Sounds",vib:"Vibration",prep:"5 s lead-in",rest:"Rest between exercises",none:"none",vol:"Volume",volN:"normal",volL:"loud",volXL:"very loud",
+  restNote:"The new rest length applies from the next round.",tip:"Space starts and pauses. Keep the screen on so the timer keeps running.",
+  back:"Back to the previous exercise",skip:"Next exercise",min:"min",offline:"Round kept on this device; it will be sent later.",
+  noServer:"Can't reach the server. Are you on the home Wi-Fi?",noPlan:"There is no plan for you today."}};
+let L=T.de;
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const fmt=s=>Math.floor(s/60)+":"+String(s%60).padStart(2,"0");
+const dur=s=>s%60===0?(s/60)+" "+L.min:s>=60?fmt(s)+" "+L.min:s+" s";
+const store={get(k,d){try{const v=localStorage.getItem(k);return v===null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}},del(k){try{localStorage.removeItem(k)}catch(e){}}};
+function today(){const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")}
+async function api(path,opt){const r=await fetch(path,opt);const j=await r.json().catch(()=>({}));if(!r.ok){const e=new Error(j.error||r.statusText);e.status=r.status;throw e}return j}
+
+// ---- plan from the server ----
+let S=null,EX=[],BASE=[],N=0;
+function usePlan(sess){
+ S=sess;N=sess.blocks.length;
+ EX=sess.blocks.map(b=>({n:b.name,s:b.summary,d:b.seconds}));
+ BASE=[];sess.blocks.forEach((b,g)=>b.steps.forEach(st=>BASE.push({g,n:st.name,d:st.seconds,c:st.cue||"",br:st.kind==="breath",soft:st.kind==="rest"})));
+ BASE.forEach((p,k)=>p.bi=k);
+ $("title").textContent=sess.plan.name;$("who").textContent=sess.person.name;
+ showStreak(sess.stats);buildSun();reset();
+}
+function showStreak(st){
+ if(!st||!st.totalDays){$("streak").textContent=L.none0;return}
+ $("streak").innerHTML=st.streak?L.streak(st.streak,st.totalDays):L.total(st.totalDays);
+}
+function applyLang(lang){
+ L=T[lang]||T.de;document.documentElement.lang=T[lang]?lang:"de";
+ const set=(id,t)=>$(id).textContent=t;
+ set("pickTitle",L.who);set("switch",L.switch);set("tSound",L.sound);set("tVib",L.vib);set("tPrep",L.prep);set("tRest",L.rest);set("tNone",L.none);
+ set("tVol",L.vol);set("tVolN",L.volN);set("tVolL",L.volL);set("tVolXL",L.volXL);set("restNote",L.restNote);set("tip",L.tip);
+ $("back").setAttribute("aria-label",L.back);$("skip").setAttribute("aria-label",L.skip);
+}
+
+// ---- timer (unchanged logic from the original page, generalised to N blocks) ----
+const PREP=5;
+let P=[],TOTAL=0;
+function buildPlan(){
+ const r=+$("optRest").value||0;P=[];
+ BASE.forEach((p,k)=>{if(r&&k>0&&p.g!==BASE[k-1].g)P.push({g:-1,rest:1,n:L.pause,d:r,c:L.restCue(EX[p.g].n)});P.push(p)});
+ TOTAL=P.reduce((a,p)=>a+p.d,0);
+}
+let i=-1,left=PREP,run=false,timer=null,actx=null,wake=null,finished=false,lastTick=0,skipped=new Set(),startedAt="";
+
+["optSound","optVib","optPrep"].forEach(id=>{$(id).checked=store.get(id,true);$(id).addEventListener("change",()=>store.set(id,$(id).checked))});
+$("optRest").value=String(store.get("optRest","10"));$("optVol").value=store.get("optVol","laut");
+$("optRest").addEventListener("change",()=>{store.set("optRest",$("optRest").value);if(i<0&&!run||finished)reset();else $("restNote").hidden=false});
+$("optVol").addEventListener("change",()=>{store.set("optVol",$("optVol").value);$("optSound").checked=true;beep(1320,180);setTimeout(()=>beep(1320,180),220)});
+
+const C=200,R=150,CIRC=2*Math.PI*R;
+let GAP=10,SEG=CIRC/5;
+function buildSun(){
+ SEG=CIRC/Math.max(N,1);GAP=N>1?Math.min(10,SEG*.2):0;
+ let rays="";for(let k=0;k<24;k++){const a=k/24*Math.PI*2,r1=176,r2=k%2?188:196;rays+=`<line x1="${C+Math.cos(a)*r1}" y1="${C+Math.sin(a)*r1}" x2="${C+Math.cos(a)*r2}" y2="${C+Math.sin(a)*r2}"/>`}
+ let segs="";for(let k=0;k<N;k++){
+  const rot=-90+k*360/N;
+  segs+=`<circle cx="${C}" cy="${C}" r="${R}" fill="none" stroke="var(--track)" stroke-width="22" stroke-linecap="round" stroke-dasharray="${SEG-GAP} ${CIRC}" transform="rotate(${rot+GAP/CIRC*180} ${C} ${C})"/>`;
+  segs+=`<circle class="seg" id="seg${k}" cx="${C}" cy="${C}" r="${R}" fill="none" stroke="var(--sun)" stroke-width="22" stroke-linecap="round" stroke-dasharray="${SEG-GAP} ${CIRC}" stroke-dashoffset="${SEG-GAP}" transform="rotate(${rot+GAP/CIRC*180} ${C} ${C})"/>`}
+ $("sun").innerHTML=`<circle cx="${C}" cy="${C}" r="126" fill="var(--card)"/><circle cx="${C}" cy="${C}" r="126" fill="none" stroke="var(--sun2)" stroke-width="2" opacity=".5"/><g id="rays" stroke="var(--sun2)" stroke-width="4" stroke-linecap="round" opacity=".25">${rays}</g>${segs}`;
+}
+function list(){
+ let cur=-1;if(i>=0){cur=P[i].g;if(P[i].rest)cur=P[i+1].g-0.5}
+ $("list").innerHTML=EX.map((e,k)=>{const c=finished||k<cur?"done":k===cur?"on":"";
+  return `<li class="${c}"><span class="dot">${finished||k<cur?"✓":k+1}</span><div><h3>${esc(e.n)}</h3><p>${esc(e.s)}</p></div><span class="d">${esc(dur(e.d))}</span></li>`}).join("");
+}
+function groupProgress(g){
+ let tot=0,done=0;P.forEach((p,k)=>{if(p.g!==g)return;tot+=p.d;if(finished||k<i)done+=p.d;else if(k===i)done+=p.d-left});return tot?done/tot:0;
+}
+function elapsed(){let e=0;for(let k=0;k<P.length;k++){if(finished||k<i)e+=P[k].d;else if(k===i)e+=P[k].d-left}return e}
+function nextName(){if(i<0)return L.first+P[0].n;const n=P[i+1];return n?L.next+n.n:L.nextDone}
+function draw(){
+ for(let k=0;k<N;k++){const p=i<0?0:groupProgress(k);$("seg"+k).setAttribute("stroke-dashoffset",(SEG-GAP)*(1-p))}
+ $("rays").setAttribute("opacity",(.25+.75*elapsed()/TOTAL).toFixed(2));
+ if(finished){list();return}
+ if(i<0){$("lbl").textContent=run?L.soon:L.ready;$("name").textContent=run?L.getReady:L.morning;$("time").textContent=run?left:fmt(TOTAL);$("next").textContent=nextName();$("cue").className="cue";$("cue").textContent=run?L.shake:L.intro(N);list();return}
+ const p=P[i];
+ $("lbl").textContent=p.rest?L.pause:L.exOf(p.g+1,N);$("name").textContent=p.rest?L.recover:p.n;
+ $("time").textContent=left>=60?fmt(left):left;$("next").textContent=nextName();
+ if(p.rest){$("cue").className="cue rest";$("cue").textContent=p.c}
+ else if(p.br){const e=p.d-left;$("cue").className="cue breath";$("cue").textContent=Math.floor(e/5)%2===0?L.in:L.out}
+ else{$("cue").className="cue";$("cue").textContent=p.c}
+ list();
+}
+let comp=null;
+const VOL={normal:{w:"triangle",g:.35},laut:{w:"square",g:.6},sehrlaut:{w:"square",g:1}};
+function beep(f,ms,vol){if(!$("optSound").checked)return;try{
+ actx=actx||new (window.AudioContext||window.webkitAudioContext)();if(actx.state==="suspended")actx.resume();
+ if(!comp){comp=actx.createDynamicsCompressor();comp.threshold.value=-20;comp.knee.value=6;comp.ratio.value=8;comp.attack.value=.002;comp.release.value=.1;const mk=actx.createGain();mk.gain.value=1.8;comp.connect(mk);mk.connect(actx.destination)}
+ const v=VOL[$("optVol").value]||VOL.laut,t=actx.currentTime,end=t+ms/1000,lvl=v.g*(vol||1);
+ [f,f*1.5].forEach((fr,k)=>{const o=actx.createOscillator(),g=actx.createGain();o.type=v.w;o.frequency.value=fr;
+  g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(lvl*(k?.35:1),t+.01);g.gain.setValueAtTime(lvl*(k?.35:1),end-.04);g.gain.linearRampToValueAtTime(0,end);
+  o.connect(g);g.connect(comp);o.start(t);o.stop(end+.01)});
+}catch(e){}}
+function goSound(){beep(1320,160);setTimeout(()=>beep(1320,160),200);setTimeout(()=>beep(1760,380),400)}
+function restSound(){beep(660,300);setTimeout(()=>beep(495,450),330)}
+function buzz(p){if(!$("optVib").checked)return;try{navigator.vibrate&&navigator.vibrate(p)}catch(e){}}
+async function keepAwake(on){try{if(on&&"wakeLock" in navigator&&!wake){wake=await navigator.wakeLock.request("screen");wake.addEventListener("release",()=>{wake=null})}else if(!on&&wake){await wake.release();wake=null}}catch(e){wake=null}}
+function enter(k){i=k;left=P[i].d;if(P[i].rest||P[i].soft){restSound();buzz([150,100,150])}else{goSound();buzz([300,120,300])}draw()}
+function finish(){
+ finished=true;run=false;clearInterval(timer);keepAwake(false);
+ $("lbl").textContent=L.done;$("name").textContent=L.strong;$("time").textContent=fmt(TOTAL);$("next").textContent="";
+ $("cue").className="cue";$("cue").textContent=L.water;$("go").textContent=L.again;
+ [660,880,1100].forEach((f,k)=>setTimeout(()=>beep(f,k===2?450:180),k*200));buzz([200,100,200,100,400]);
+ saveRound();draw();
+}
+function step(){
+ left--;
+ if(left>0&&left<=3)beep(990,140,.8);
+ if(left<=0){if(i+1>=P.length)finish();else enter(i+1)}else draw();
+}
+function tickLoop(){const now=Date.now();while(run&&now-lastTick>=1000){lastTick+=1000;step()}}
+function start(){
+ if(finished)reset();
+ if(!startedAt)startedAt=new Date().toISOString();
+ run=true;$("go").textContent=L.pauseBtn;beep(700,120);keepAwake(true);
+ if(i<0&&!$("optPrep").checked){enter(0)}else draw();
+ lastTick=Date.now();clearInterval(timer);timer=setInterval(tickLoop,200);
+}
+function pause(){run=false;clearInterval(timer);$("go").textContent=L.resume;keepAwake(false);draw()}
+function reset(){buildPlan();$("restNote").hidden=true;clearInterval(timer);run=false;finished=false;i=-1;left=PREP;skipped=new Set();startedAt="";$("go").textContent=L.start;keepAwake(false);draw()}
+function skip(){if(finished)return;if(i>=0&&!P[i].rest)skipped.add(P[i].bi);if(i+1>=P.length){finish();return}enter(i+1);lastTick=Date.now()}
+function back(){if(finished||i<=0){reset();return}
+ const st=g=>P.findIndex(p=>p.g===g);let k;
+ if(P[i].rest)k=st(P[i-1].g);
+ else{const g=P[i].g;k=st(g);if(k===i&&P[i].d-left<3){if(g===0){reset();return}k=st(g-1)}}
+ i=k;left=P[i].d;lastTick=Date.now();draw()}
+
+// ---- saving rounds: queue locally, send when the server answers ----
+async function flush(){
+ const q=store.get("pending",[]);if(!q.length)return null;
+ const rest=[];let last=null;
+ for(const r of q){try{last=await api(`/api/people/${encodeURIComponent(r.person)}/rounds`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(r.body)})}
+  catch(e){if(e.status&&e.status<500)continue;rest.push(r)}} // 4xx: drop, it will never succeed
+ rest.length?store.set("pending",rest):store.del("pending");
+ return rest.length?null:last;
+}
+async function saveRound(){
+ const q=store.get("pending",[]);
+ q.push({person:S.person.key,body:{planVersionId:S.plan.versionId,date:today(),startedAt,completed:true,skippedSteps:[...skipped].sort((a,b)=>a-b)}});
+ store.set("pending",q);
+ const st=await flush();
+ if(st&&S){S.stats=st;showStreak(st);$("msg").textContent=""}else $("msg").textContent=L.offline;
+}
+
+// ---- screens ----
+async function pickScreen(msg){
+ $("run").hidden=true;$("pick").hidden=false;$("pickMsg").textContent=msg||"";applyLang((navigator.language||"de").slice(0,2));
+ try{const ppl=await api("/api/people");
+  $("people").innerHTML=ppl.map(p=>`<button data-key="${esc(p.key)}">${esc(p.name)}</button>`).join("");
+  $("people").querySelectorAll("button").forEach(b=>b.addEventListener("click",()=>{store.set("person",b.dataset.key);load(b.dataset.key)}));
+ }catch(e){$("pickMsg").textContent=L.noServer}
+}
+async function load(key){
+ if(run)return;
+ try{
+  await flush();
+  const sess=await api(`/api/people/${encodeURIComponent(key)}/today?date=${today()}`);
+  applyLang(sess.person.language);$("pick").hidden=true;$("run").hidden=false;$("msg").textContent="";usePlan(sess);
+ }catch(e){
+  if(e.status===404){store.del("person");pickScreen(e.message.includes("no plan")?L.noPlan:"")}
+  else pickScreen(L.noServer);
+ }
+}
+$("switch").addEventListener("click",()=>{if(run)pause();store.del("person");pickScreen()});
+$("go").addEventListener("click",()=>run?pause():start());
+$("skip").addEventListener("click",skip);
+$("back").addEventListener("click",back);
+document.addEventListener("keydown",e=>{if(e.code==="Space"&&!$("run").hidden&&e.target.tagName!=="INPUT"&&e.target.tagName!=="SELECT"&&e.target.tagName!=="BUTTON"){e.preventDefault();run?pause():start()}});
+document.addEventListener("visibilitychange",()=>{
+ if(document.visibilityState!=="visible")return;
+ if(run){keepAwake(true);tickLoop()}
+ else if(S&&!finished&&i<0&&store.get("person",null))load(S.person.key); // a new day or a new plan version
+});
+const k=store.get("person",null);k?load(k):pickScreen();
+}
+</script>
+</body>
+</html>
