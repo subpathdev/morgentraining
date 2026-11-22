@@ -49,11 +49,23 @@ Schema: [`internal/store/schema.sql`](internal/store/schema.sql).
 
 ## API
 
+The API is described in [`api/openapi.yaml`](api/openapi.yaml) (OpenAPI 3.0), and the running service serves it at `/openapi.yaml`. The spec is the source of truth, built **spec-first**:
+
+- [oapi-codegen](https://github.com/oapi-codegen/oapi-codegen) generates the Go types and a typed server interface for `net/http` (`internal/api/oapi.gen.go`). The handlers implement that interface, so the code can't offer an endpoint or response the spec doesn't have.
+- Every API request is validated against the spec before it reaches a handler (unknown fields, wrong types or formats give `400` with a JSON error).
+- The API tests also check every response against the spec, so the code can't drift from it.
+
+After changing the spec, regenerate and test:
+
+```bash
+go generate ./... && go test ./...
+```
+
 | Method and path | What it does |
 | :--- | :--- |
 | `GET /api/people` | People to choose from |
 | `GET /api/people/{key}/today?date=YYYY-MM-DD` | Today's plan for that person (in their language) and their stats |
-| `POST /api/people/{key}/rounds` | Record a round: `{"planVersionId":1,"date":"2026-11-22","completed":true,"skippedSteps":[]}` |
+| `POST /api/people/{key}/rounds` | Record a round |
 | `GET /healthz` | Liveness |
 
 If the server can't be reached when a round ends, the page keeps the round in the browser and sends it on the next load.
@@ -76,5 +88,6 @@ morgentraining backup -db /data/morgentraining.db /backup/morgentraining-$(date 
 ## Development
 
 ```bash
+go generate ./...   # only after changing api/openapi.yaml
 go vet ./... && go test ./...
 ```

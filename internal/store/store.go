@@ -21,7 +21,10 @@ var schemaV1 string
 
 const DateLayout = "2006-01-02"
 
-var ErrNotFound = errors.New("not found")
+var (
+	ErrNotFound = errors.New("not found")
+	ErrInvalid  = errors.New("invalid input")
+)
 
 type Store struct {
 	db *sql.DB
@@ -428,11 +431,11 @@ func (s *Store) AddRound(ctx context.Context, personKey string, in RoundInput) (
 		return Stats{}, err
 	}
 	if _, err := time.Parse(DateLayout, in.Date); err != nil {
-		return Stats{}, fmt.Errorf("date must be YYYY-MM-DD")
+		return Stats{}, fmt.Errorf("%w: date must be YYYY-MM-DD", ErrInvalid)
 	}
 	var n int
 	if err := s.db.QueryRowContext(ctx, "SELECT count(*) FROM plan_version WHERE id = ?", in.PlanVersionID).Scan(&n); err != nil || n == 0 {
-		return Stats{}, fmt.Errorf("unknown plan version %d", in.PlanVersionID)
+		return Stats{}, fmt.Errorf("%w: unknown plan version %d", ErrInvalid, in.PlanVersionID)
 	}
 	skipped, _ := json.Marshal(in.SkippedSteps)
 	if in.SkippedSteps == nil {

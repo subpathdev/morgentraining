@@ -1,0 +1,298 @@
+openapi: 3.0.3
+info:
+  title: Morgentraining API
+  version: 1.0.0
+  description: |
+    API behind the Morgentraining page: people, their plan for today, and finished rounds.
+
+    There is no authentication. The service is meant for a home network behind a gateway
+    that limits access (later an OIDC proxy that tells the service who is signed in).
+
+    Plans are versioned. A saved plan version never changes, and every round points to the
+    version it used. Plans and people are changed with the `morgentraining import` command,
+    not through this API (yet).
+servers:
+  - url: /
+tags:
+  - name: people
+  - name: rounds
+  - name: ops
+
+paths:
+  /healthz:
+    get:
+      operationId: getHealth
+      tags: [ops]
+      summary: Liveness check
+      responses:
+        "200":
+          description: The service is up.
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: "ok\n"
+
+  /api/people:
+    get:
+      operationId: listPeople
+      tags: [people]
+      summary: People to choose from on the start page
+      responses:
+        "200":
+          description: All people, in the order they were added.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Person"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/people/{key}/today:
+    parameters:
+      - $ref: "#/components/parameters/PersonKey"
+    get:
+      operationId: getToday
+      tags: [people]
+      summary: The person's plan for a day, in their language, with their stats
+      description: |
+        Returns the newest version of the plan assigned to the person on that day.
+        Texts are already in the person's language (falling back to German, then English).
+      parameters:
+        - name: date
+          in: query
+          required: false
+          description: The person's local date. Defaults to today in the server's time zone (`MT_TZ`).
+          schema:
+            type: string
+            format: date
+            example: "2026-11-22"
+      responses:
+        "200":
+          description: Plan and stats.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/people/{key}/rounds:
+    parameters:
+      - $ref: "#/components/parameters/PersonKey"
+    post:
+      operationId: addRound
+      tags: [rounds]
+      summary: Record a finished round
+      description: |
+        Several rounds on the same day are allowed; the streak counts days with at least
+        one completed round.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RoundInput"
+      responses:
+        "200":
+          description: Saved. Returns the person's stats as of the round's date.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Stats"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+components:
+  parameters:
+    PersonKey:
+      name: key
+      in: path
+      required: true
+      description: The person's key, e.g. `jan`.
+      schema:
+        type: string
+        pattern: "^[a-z0-9_-]{1,64}$"
+        example: jan
+
+  responses:
+    BadRequest:
+      description: The request is invalid (e.g. wrong date format or an unknown plan version).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotFound:
+      description: Unknown person, or the person has no plan on that day.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    InternalError:
+      description: Something went wrong on the server; details are in the server log.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      additionalProperties: false
+      properties:
+        error:
+          type: string
+          example: "not found"
+
+    Person:
+      type: object
+      required: [key, name, language]
+      additionalProperties: false
+      properties:
+        key:
+          type: string
+          example: jan
+        name:
+          type: string
+          example: Jan
+        language:
+          type: string
+          description: Language code for texts, e.g. `de` or `en`.
+          example: de
+
+    Session:
+      type: object
+      description: Everything the page needs for one person's round.
+      required: [person, plan, blocks, stats]
+      additionalProperties: false
+      properties:
+        person:
+          $ref: "#/components/schemas/Person"
+        plan:
+          $ref: "#/components/schemas/SessionPlan"
+        blocks:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/Block"
+        stats:
+          $ref: "#/components/schemas/Stats"
+
+    SessionPlan:
+      type: object
+      required: [key, name, version, versionId, totalSeconds]
+      additionalProperties: false
+      properties:
+        key:
+          type: string
+          example: morgen-5
+        name:
+          type: string
+          example: 5 Minuten morgens
+        version:
+          type: integer
+          minimum: 1
+          description: Version number within this plan.
+        versionId:
+          type: integer
+          format: int64
+          description: Global ID of this plan version; send it back with the round.
+        totalSeconds:
+          type: integer
+          description: Sum of all steps, without the optional rests the page adds between blocks.
+          example: 300
+
+    Block:
+      type: object
+      description: One item in the exercise list and one segment of the sun ring.
+      required: [name, summary, seconds, steps]
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          example: Wandsitzen
+        summary:
+          type: string
+        seconds:
+          type: integer
+          example: 60
+        steps:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/Step"
+
+    Step:
+      type: object
+      required: [kind, name, cue, seconds]
+      additionalProperties: false
+      properties:
+        kind:
+          type: string
+          enum: [exercise, rest, breath]
+          description: "`rest` is a short break inside a block; `breath` shows breathe in / breathe out."
+        name:
+          type: string
+          example: Wandsitzen 1 von 2
+        cue:
+          type: string
+          description: Coaching text shown during the step; may be empty.
+        seconds:
+          type: integer
+          minimum: 1
+          example: 25
+
+    Stats:
+      type: object
+      required: [streak, totalDays, doneToday]
+      additionalProperties: false
+      properties:
+        streak:
+          type: integer
+          minimum: 0
+          description: Days in a row with a completed round, counting back from today (or from yesterday if today has none yet).
+        totalDays:
+          type: integer
+          minimum: 0
+          description: Days with at least one completed round.
+        doneToday:
+          type: boolean
+
+    RoundInput:
+      type: object
+      required: [planVersionId, date, completed]
+      additionalProperties: false
+      properties:
+        planVersionId:
+          type: integer
+          format: int64
+          description: "`plan.versionId` from the session the round was done with."
+        date:
+          type: string
+          format: date
+          description: The person's local date.
+          example: "2026-11-22"
+        startedAt:
+          type: string
+          format: date-time
+          description: When the round was started.
+        completed:
+          type: boolean
+          description: True if the round ran to the end (steps may have been skipped).
+        skippedSteps:
+          type: array
+          description: Positions of skipped steps, counted across all blocks from 0.
+          items:
+            type: integer
+            minimum: 0

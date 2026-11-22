@@ -84,9 +84,13 @@ func serve(log *slog.Logger, args []string) error {
 		return err
 	}
 
+	handler, err := (&api.Server{Store: st, Web: web.Files, Loc: loc, Log: log}).Handler()
+	if err != nil {
+		return err
+	}
 	srv := &http.Server{
 		Addr:              *addr,
-		Handler:           (&api.Server{Store: st, Web: web.Files, Loc: loc, Log: log}).Handler(),
+		Handler:           handler,
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
