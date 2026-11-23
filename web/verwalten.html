@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#ff6a2b">
+<title>Morgentraining verwalten</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<style>
+/* Same colours as the workout page. No external requests. */
+:root{color-scheme:light dark;
+--bg:light-dark(#ffe8d4,#14173a);--ink:light-dark(#1c1a3d,#fbeee2);--soft:light-dark(#5b5470,#b9b3d4);
+--card:light-dark(#fff6ee,#1e2250);--line:light-dark(#f2cdb0,#2f3470);--sun:#ff6a2b;
+--ok:light-dark(#2d7a5a,#7fd6ad);--warn:light-dark(#9a4a00,#ffc48a)}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.wrap{max-width:760px;margin:0 auto;padding:clamp(20px,4vw,40px) max(4vw,16px) 64px}
+header{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap}
+h1{font-size:clamp(26px,6vw,34px);line-height:1.1;margin:0;font-weight:800}
+h2{font-size:22px;margin:36px 0 10px}
+h3{font-size:17px;margin:0}
+a{color:inherit}
+.soft{color:var(--soft);font-size:14px}
+.card{background:var(--card);border:1.5px solid var(--line);border-radius:14px;padding:14px;margin:10px 0}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+.row>label{flex:1 1 150px}
+label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--soft)}
+input,select,textarea{font:inherit;font-size:16px;color:var(--ink);background:var(--bg);border:1.5px solid var(--line);border-radius:10px;min-height:42px;padding:6px 10px;width:100%}
+textarea{min-height:60px;resize:vertical}
+input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-visible{outline:3px solid var(--sun);outline-offset:1px}
+input.sec{width:90px}
+button{font:inherit;font-size:15px;color:inherit;min-height:42px;border-radius:999px;border:1.5px solid var(--line);background:var(--card);cursor:pointer;padding:0 16px}
+button.main{background:var(--sun);border-color:var(--sun);color:#fff;font-weight:700}
+button.icon{min-width:42px;padding:0}
+button:disabled{opacity:.45;cursor:default}
+table{width:100%;border-collapse:collapse}
+td,th{padding:8px 6px;border-bottom:1.5px solid var(--line);text-align:left;vertical-align:middle}
+th{font-size:13px;color:var(--soft);font-weight:600}
+.step{display:grid;grid-template-columns:minmax(0,2fr) 90px minmax(0,2fr) auto;gap:8px;align-items:end;padding:8px 0;border-top:1px dashed var(--line)}
+.step .tools,.block-tools{display:flex;gap:4px}
+@media (max-width:560px){.step{grid-template-columns:minmax(0,1fr) 90px}.step .over,.step .tools{grid-column:1/-1}}
+.block-head{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px}
+.msg{min-height:22px;margin:10px 0 0;font-size:15px}
+.msg.ok{color:var(--ok)}.msg.err{color:var(--warn);white-space:pre-wrap}
+.total{font-weight:700}
+.sticky{position:sticky;bottom:0;background:var(--bg);padding:12px 0;border-top:1.5px solid var(--line);margin-top:16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+details summary{cursor:pointer;color:var(--soft);margin:8px 0}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Verwalten</h1>
+    <a href="./" class="soft">Zurück zum Training</a>
+  </header>
+  <p class="soft">Ohne Anmeldung: Jeder im WLAN kann hier Personen und Pläne ändern. Ein gespeicherter Plan wird zur neuen Version; frühere Runden behalten ihre.</p>
+
+  <h2>Personen</h2>
+  <div class="card">
+    <table>
+      <thead><tr><th>Name</th><th>Sprache</th><th>Plan</th><th></th></tr></thead>
+      <tbody id="people"></tbody>
+    </table>
+    <details id="addPerson">
+      <summary>Person hinzufügen</summary>
+      <div class="row">
+        <label>Name<input id="newName" autocomplete="off"></label>
+        <label>Kürzel (für die Adresse)<input id="newKey" pattern="[a-z0-9_\-]{1,64}" autocomplete="off"></label>
+        <label>Sprache<select id="newLang"></select></label>
+        <label>Plan<select id="newPlan"></select></label>
+        <button class="main" id="addBtn">Hinzufügen</button>
+      </div>
+    </details>
+    <p class="msg" id="peopleMsg"></p>
+  </div>
+
+  <h2>Pläne</h2>
+  <div class="row">
+    <label>Plan<select id="planPick"></select></label>
+    <button id="newPlanBtn">Neuer Plan</button>
+  </div>
+  <div id="newPlanRow" class="row card" hidden>
+    <label>Kürzel des neuen Plans<input id="newPlanKey" pattern="[a-z0-9_\-]{1,64}" placeholder="z. B. morgen-10" autocomplete="off"></label>
+    <label>Als Vorlage<select id="newPlanFrom"></select></label>
+    <button class="main" id="newPlanOk">Anlegen</button>
+  </div>
+
+  <div id="editor" hidden>
+    <p class="soft" id="planInfo"></p>
+    <div class="row">
+      <label>Name (Deutsch)<input data-path="names.de"></label>
+      <label>Name (Englisch)<input data-path="names.en"></label>
+    </div>
+    <div id="blocks"></div>
+    <button id="addBlock">Block hinzufügen</button>
+
+    <details>
+      <summary>Neue Übung für die Bibliothek</summary>
+      <div class="card">
+        <div class="row">
+          <label>Kürzel<input id="exKey" pattern="[a-z0-9_\-]{1,64}" placeholder="z. B. lunges" autocomplete="off"></label>
+          <label>Art<select id="exKind"><option value="exercise">Übung</option><option value="rest">Pause</option><option value="breath">Atmen</option></select></label>
+        </div>
+        <div class="row">
+          <label>Name (Deutsch)<input id="exNameDe"></label>
+          <label>Name (Englisch)<input id="exNameEn"></label>
+        </div>
+        <div class="row">
+          <label>Hinweis (Deutsch)<textarea id="exCueDe"></textarea></label>
+          <label>Hinweis (Englisch)<textarea id="exCueEn"></textarea></label>
+        </div>
+        <button id="exAdd">Übung hinzufügen</button>
+        <p class="soft">Wird mit dem Plan gespeichert und steht danach allen Plänen zur Verfügung.</p>
+      </div>
+    </details>
+
+    <div class="sticky">
+      <span>Gesamt: <span class="total" id="total"></span></span>
+      <button class="main" id="save">Plan speichern</button>
+      <button id="reload">Verwerfen</button>
+    </div>
+    <p class="msg" id="planMsg"></p>
+  </div>
+</div>
+
+<script>
+{
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const fmt=s=>Math.floor(s/60)+":"+String(s%60).padStart(2,"0")+" min";
+const LANGS={de:"Deutsch",en:"Englisch",pt:"Portugiesisch"};
+const KIND={exercise:"Übung",rest:"Pause",breath:"Atmen"};
+function today(){const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")}
+async function api(path,opt){
+ const r=await fetch(path,opt);const j=await r.json().catch(()=>({}));
+ if(!r.ok){const e=new Error(j.error||r.statusText);e.status=r.status;throw e}
+ return {status:r.status,body:j};
+}
+const put=(path,body)=>api(path,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+// The server's messages are English and list every problem, separated by "; ".
+const problems=e=>e.message.replace(/^invalid input: /,"").split("; ").join("\n");
+function slug(s){return s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/ß/g,"ss").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,64)}
+function say(id,text,ok){const m=$(id);m.textContent=text;m.className="msg "+(ok?"ok":"err")}
+
+let PLANS=[];   // summaries
+let LIB={};     // exercise key -> ExerciseInput, from every plan
+let plan=null;  // the plan being edited (PlanInput)
+let planKey="",planVersion=0,dirty=false;
+
+// ---------- people ----------
+async function loadPeople(){
+ const {body:people}=await api("/api/people");
+ const rows=await Promise.all(people.map(async p=>{
+  let planOf="";
+  try{planOf=(await api(`/api/people/${encodeURIComponent(p.key)}/today?date=${today()}`)).body.plan.key}catch(e){}
+  return {...p,plan:planOf};
+ }));
+ $("people").innerHTML=rows.map(p=>`<tr data-key="${esc(p.key)}">
+  <td><input data-f="name" value="${esc(p.name)}" aria-label="Name"></td>
+  <td><select data-f="language" aria-label="Sprache">${langOptions(p.language)}</select></td>
+  <td><select data-f="plan" aria-label="Plan">${planOptions(p.plan)}</select></td>
+  <td><button data-act="savePerson">Speichern</button></td></tr>`).join("");
+}
+function langOptions(sel){const l={...LANGS};if(sel&&!l[sel])l[sel]=sel;return Object.entries(l).map(([k,v])=>`<option value="${esc(k)}"${k===sel?" selected":""}>${esc(v)}</option>`).join("")}
+function planOptions(sel){return (sel?"":`<option value="">–</option>`)+PLANS.map(p=>`<option value="${esc(p.key)}"${p.key===sel?" selected":""}>${esc(p.names.de||p.names.en||p.key)}</option>`).join("")}
+$("people").addEventListener("click",async e=>{
+ const b=e.target.closest("[data-act=savePerson]");if(!b)return;
+ const tr=b.closest("tr"),f=n=>tr.querySelector(`[data-f=${n}]`).value.trim();
+ if(!f("plan")){say("peopleMsg","Bitte einen Plan wählen.");return}
+ try{await put(`/api/people/${encodeURIComponent(tr.dataset.key)}`,{name:f("name"),language:f("language"),plan:f("plan")});
+  say("peopleMsg",`${f("name")} gespeichert.`,true)}
+ catch(err){say("peopleMsg",problems(err))}
+});
+$("newName").addEventListener("input",()=>{if(!$("newKey").dataset.touched)$("newKey").value=slug($("newName").value)});
+$("newKey").addEventListener("input",()=>$("newKey").dataset.touched="1");
+$("addBtn").addEventListener("click",async()=>{
+ const name=$("newName").value.trim(),key=$("newKey").value.trim();
+ if(!name||!/^[a-z0-9_-]{1,64}$/.test(key)){say("peopleMsg","Bitte Name und ein Kürzel aus Kleinbuchstaben, Ziffern, - oder _ angeben.");return}
+ try{
+  const r=await put(`/api/people/${encodeURIComponent(key)}`,{name,language:$("newLang").value,plan:$("newPlan").value});
+  say("peopleMsg",r.status===201?`${name} hinzugefügt.`:`${name} gab es schon, die Angaben sind aktualisiert.`,true);
+  $("newName").value="";$("newKey").value="";delete $("newKey").dataset.touched;
+  await loadPeople();
+ }catch(err){say("peopleMsg",problems(err))}
+});
+
+// ---------- plans ----------
+async function loadPlans(){
+ PLANS=(await api("/api/plans")).body;
+ // The exercise library: everything any plan uses.
+ const details=await Promise.all(PLANS.map(p=>api(`/api/plans/${encodeURIComponent(p.key)}`).then(r=>r.body)));
+ LIB={};details.forEach(d=>(d.plan.exercises||[]).forEach(ex=>LIB[ex.key]=ex));
+ $("planPick").innerHTML=PLANS.map(p=>`<option value="${esc(p.key)}">${esc(p.names.de||p.names.en||p.key)} (Version ${p.version}, ${fmt(p.totalSeconds)})</option>`).join("");
+ $("newPlanFrom").innerHTML=`<option value="">leer</option>`+PLANS.map(p=>`<option value="${esc(p.key)}">${esc(p.names.de||p.key)}</option>`).join("");
+ $("newPlan").innerHTML=planOptions(PLANS[0]&&PLANS[0].key);
+ $("newLang").innerHTML=langOptions("de");
+ return details;
+}
+async function openPlan(key){
+ if(dirty&&!confirm("Ungespeicherte Änderungen verwerfen?")){$("planPick").value=planKey;return}
+ const {body:d}=await api(`/api/plans/${encodeURIComponent(key)}`);
+ d.plan.exercises.forEach(ex=>LIB[ex.key]=ex);
+ startEditing(key,d.version,d.plan);
+}
+function startEditing(key,version,p){
+ planKey=key;planVersion=version;plan=p;dirty=false;
+ plan.names=plan.names||{};
+ $("planPick").value=key;
+ $("planInfo").textContent=version?`Plan „${key}“, Version ${version}. Speichern legt Version ${version+1} an, wenn sich etwas geändert hat.`:`Neuer Plan „${key}“. Speichern legt Version 1 an.`;
+ document.querySelectorAll("#editor > .row [data-path]").forEach(i=>i.value=get(plan,i.dataset.path)||"");
+ $("planMsg").textContent="";$("editor").hidden=false;
+ render();
+}
+function get(o,path){return path.split(".").reduce((a,k)=>a==null?a:a[k],o)}
+function set(o,path,v){
+ const ks=path.split("."),last=ks.pop();
+ const t=ks.reduce((a,k)=>(a[k]=a[k]??(/^\d+$/.test(k)?[]:{})),o);
+ if(v===""){delete t[last]}else t[last]=v;
+}
+function exerciseOptions(sel){
+ const keys=Object.keys(LIB).sort((a,b)=>exName(a).localeCompare(exName(b),"de"));
+ return keys.map(k=>`<option value="${esc(k)}"${k===sel?" selected":""}>${esc(exName(k))} · ${esc(KIND[LIB[k].kind||"exercise"])}</option>`).join("");
+}
+function exName(k){const e=LIB[k];return e?(e.names.de||e.names.en||k):k}
+function render(){
+ $("blocks").innerHTML=plan.blocks.map((b,bi)=>`<div class="card" data-b="${bi}">
+  <div class="block-head"><h3>Block ${bi+1} · ${fmt(blockSeconds(b))}</h3>
+   <div class="block-tools">
+    <button class="icon" data-act="blockUp" ${bi===0?"disabled":""} aria-label="Block nach oben">↑</button>
+    <button class="icon" data-act="blockDown" ${bi===plan.blocks.length-1?"disabled":""} aria-label="Block nach unten">↓</button>
+    <button class="icon" data-act="blockDel" ${plan.blocks.length===1?"disabled":""} aria-label="Block löschen">✕</button>
+   </div></div>
+  <div class="row">
+   <label>Name (Deutsch)<input data-path="blocks.${bi}.names.de" value="${esc(get(b,"names.de"))}"></label>
+   <label>Name (Englisch)<input data-path="blocks.${bi}.names.en" value="${esc(get(b,"names.en"))}"></label>
+  </div>
+  <div class="row">
+   <label>Kurzbeschreibung (Deutsch)<input data-path="blocks.${bi}.summary.de" value="${esc(get(b,"summary.de"))}"></label>
+   <label>Kurzbeschreibung (Englisch)<input data-path="blocks.${bi}.summary.en" value="${esc(get(b,"summary.en"))}"></label>
+  </div>
+  ${b.steps.map((s,si)=>`<div class="step" data-s="${si}">
+   <label>Übung<select data-path="blocks.${bi}.steps.${si}.exercise">${exerciseOptions(s.exercise)}</select></label>
+   <label>Sekunden<input class="sec" type="number" min="1" max="3600" data-num data-path="blocks.${bi}.steps.${si}.seconds" value="${esc(s.seconds)}"></label>
+   <label class="over">Eigener Name (optional)<input data-path="blocks.${bi}.steps.${si}.names.de" placeholder="${esc(exName(s.exercise))}" value="${esc(get(s,"names.de"))}"></label>
+   <div class="tools">
+    <button class="icon" data-act="stepUp" ${si===0?"disabled":""} aria-label="Schritt nach oben">↑</button>
+    <button class="icon" data-act="stepDown" ${si===b.steps.length-1?"disabled":""} aria-label="Schritt nach unten">↓</button>
+    <button class="icon" data-act="stepDel" ${b.steps.length===1?"disabled":""} aria-label="Schritt löschen">✕</button>
+   </div></div>`).join("")}
+  <button data-act="stepAdd">Schritt hinzufügen</button>
+ </div>`).join("");
+ total();
+}
+const blockSeconds=b=>b.steps.reduce((a,s)=>a+(+s.seconds||0),0);
+// Updates the total and each block's length in place, without re-rendering the inputs.
+function total(){
+ $("total").textContent=fmt(plan.blocks.reduce((a,b)=>a+blockSeconds(b),0));
+ plan.blocks.forEach((b,bi)=>{const h=document.querySelector(`[data-b="${bi}"] h3`);if(h)h.textContent=`Block ${bi+1} · ${fmt(blockSeconds(b))}`});
+}
+function changed(){dirty=true;$("planMsg").textContent=""}
+const OPTIONAL=/^blocks\.\d+\.(summary|steps\.\d+\.(names|cues))$/;
+// Text and number fields change the plan without re-rendering, so the cursor stays.
+$("editor").addEventListener("input",e=>{
+ const p=e.target.dataset.path;if(!p)return;
+ let v=e.target.value;if(e.target.dataset.num!==undefined)v=v===""?"":Math.round(+v);
+ else if(e.target.tagName!=="SELECT")v=v.trimStart();
+ set(plan,p,v);changed();
+ // An optional text emptied in every language is left out, as if never written,
+ // so saving an unchanged-looking plan doesn't make a new version.
+ const parent=p.split(".").slice(0,-1).join(".");
+ if(OPTIONAL.test(parent)&&!Object.keys(get(plan,parent)||{}).length)set(plan,parent,"");
+ if(e.target.dataset.num!==undefined)total();
+ if(e.target.tagName==="SELECT")render();
+});
+$("editor").addEventListener("click",e=>{
+ const b=e.target.closest("button[data-act]");if(!b)return;
+ const bi=+b.closest("[data-b]")?.dataset.b,si=+b.closest("[data-s]")?.dataset.s,bl=plan.blocks;
+ const swap=(a,i,j)=>{[a[i],a[j]]=[a[j],a[i]]};
+ switch(b.dataset.act){
+  case "blockUp":swap(bl,bi,bi-1);break;
+  case "blockDown":swap(bl,bi,bi+1);break;
+  case "blockDel":if(!confirm(`Block ${bi+1} löschen?`))return;bl.splice(bi,1);break;
+  case "stepUp":swap(bl[bi].steps,si,si-1);break;
+  case "stepDown":swap(bl[bi].steps,si,si+1);break;
+  case "stepDel":bl[bi].steps.splice(si,1);break;
+  case "stepAdd":{const last=bl[bi].steps.at(-1);bl[bi].steps.push({exercise:last?last.exercise:Object.keys(LIB)[0],seconds:30});break}
+  default:return;
+ }
+ changed();render();
+});
+$("addBlock").addEventListener("click",()=>{
+ plan.blocks.push({names:{de:"Neuer Block"},steps:[{exercise:Object.keys(LIB)[0]||"",seconds:60}]});changed();render();
+ $("blocks").lastElementChild.querySelector("input").select();
+});
+$("exAdd").addEventListener("click",()=>{
+ const key=$("exKey").value.trim(),de=$("exNameDe").value.trim(),en=$("exNameEn").value.trim();
+ if(!/^[a-z0-9_-]{1,64}$/.test(key)||!(de||en)){say("planMsg","Neue Übung: Kürzel aus Kleinbuchstaben, Ziffern, - oder _ und mindestens einen Namen angeben.");return}
+ if(LIB[key]&&!confirm(`Die Übung „${key}“ gibt es schon. Ihre Namen und Hinweise ersetzen, auch in anderen Plänen?`))return;
+ const ex={key,kind:$("exKind").value,names:{}};
+ if(de)ex.names.de=de;if(en)ex.names.en=en;
+ const cues={};if($("exCueDe").value.trim())cues.de=$("exCueDe").value.trim();if($("exCueEn").value.trim())cues.en=$("exCueEn").value.trim();
+ if(Object.keys(cues).length)ex.cues=cues;
+ LIB[key]=ex;
+ ["exKey","exNameDe","exNameEn","exCueDe","exCueEn"].forEach(i=>$(i).value="");
+ changed();render();say("planMsg",`Übung „${de||en}“ steht jetzt in der Auswahl.`,true);
+});
+$("save").addEventListener("click",async()=>{
+ // Send every exercise the plan uses, so the server has them even if new.
+ const used=[...new Set(plan.blocks.flatMap(b=>b.steps.map(s=>s.exercise)))];
+ const body={...plan,exercises:used.filter(k=>LIB[k]).map(k=>LIB[k])};
+ const bad=plan.blocks.flatMap((b,bi)=>b.steps.map((s,si)=>(!(+s.seconds>=1&&+s.seconds<=3600))?`Block ${bi+1}, Schritt ${si+1}: Sekunden 1–3600`:null)).filter(Boolean);
+ if(bad.length){say("planMsg",bad.join("\n"));return}
+ $("save").disabled=true;
+ try{
+  const {body:r}=await put(`/api/plans/${encodeURIComponent(planKey)}`,body);
+  dirty=false;
+  say("planMsg",r.changed?`Gespeichert als Version ${r.version}. Wer diesem Plan folgt, bekommt sie beim nächsten Öffnen.`:"Keine Änderung, nichts gespeichert.",true);
+  await loadPlans();await loadPeople();
+  $("planPick").value=planKey;planVersion=r.version;
+  $("planInfo").textContent=`Plan „${planKey}“, Version ${r.version}. Speichern legt Version ${r.version+1} an, wenn sich etwas geändert hat.`;
+ }catch(err){say("planMsg","Nicht gespeichert:\n"+problems(err))}
+ finally{$("save").disabled=false}
+});
+$("reload").addEventListener("click",()=>{if(!planVersion){$("editor").hidden=true;return}dirty=false;openPlan(planKey)});
+$("planPick").addEventListener("change",()=>openPlan($("planPick").value));
+$("newPlanBtn").addEventListener("click",()=>{$("newPlanRow").hidden=!$("newPlanRow").hidden;$("newPlanKey").focus()});
+$("newPlanOk").addEventListener("click",async()=>{
+ const key=$("newPlanKey").value.trim();
+ if(!/^[a-z0-9_-]{1,64}$/.test(key)){say("planMsg","Kürzel aus Kleinbuchstaben, Ziffern, - oder _ angeben.");return}
+ if(PLANS.some(p=>p.key===key)){say("planMsg",`Den Plan „${key}“ gibt es schon.`);return}
+ if(dirty&&!confirm("Ungespeicherte Änderungen verwerfen?"))return;
+ let p={names:{de:key},blocks:[{names:{de:"Aufwärmen"},steps:[{exercise:Object.keys(LIB)[0]||"",seconds:60}]}]};
+ const from=$("newPlanFrom").value;
+ if(from){const {body:d}=await api(`/api/plans/${encodeURIComponent(from)}`);p=d.plan;p.names={de:(d.plan.names.de||key)+" (Kopie)"};delete p.createdBy}
+ $("newPlanRow").hidden=true;$("newPlanKey").value="";
+ if(![...$("planPick").options].some(o=>o.value===key))$("planPick").add(new Option(`${key} (neu)`,key));
+ startEditing(key,0,p);
+});
+window.addEventListener("beforeunload",e=>{if(dirty){e.preventDefault()}});
+
+(async()=>{
+ try{
+  await loadPlans();await loadPeople();
+  if(PLANS.length)await openPlan(new URLSearchParams(location.search).get("plan")||PLANS[0].key);
+ }catch(e){say("peopleMsg","Server nicht erreichbar. Bist du im WLAN zu Hause?")}
+})();
+}
+</script>
+</body>
+</html>
