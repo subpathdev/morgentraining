@@ -34,7 +34,19 @@ type Trainer interface {
 	RecordRound(ctx context.Context, personKey string, in training.RoundInput) (training.Stats, error)
 }
 
-var _ Trainer = (*training.Service)(nil)
+// PeopleEditor is what the handlers need to add or change people.
+type PeopleEditor interface {
+	// SavePerson adds or updates a person and reports whether they are new.
+	SavePerson(ctx context.Context, p training.PersonImport) (created bool, err error)
+}
+
+// Domain is everything the handlers need. *training.Service implements it.
+type Domain interface {
+	Trainer
+	PeopleEditor
+}
+
+var _ Domain = (*training.Service)(nil)
 
 // Options configure the handler.
 type Options struct {
@@ -43,9 +55,9 @@ type Options struct {
 }
 
 // New returns the HTTP handler for the page, the API, /healthz and /openapi.yaml.
-func New(svc Trainer, opts Options) (http.Handler, error) {
+func New(svc Domain, opts Options) (http.Handler, error) {
 	if svc == nil || opts.Static == nil {
-		return nil, errors.New("httpapi: a Trainer and Static files are required")
+		return nil, errors.New("httpapi: a Domain and Static files are required")
 	}
 	log := opts.Logger
 	if log == nil {
@@ -117,9 +129,9 @@ func static(files fs.FS) http.Handler {
 	})
 }
 
-// handlers implements oapi.StrictServerInterface on top of a Trainer.
+// handlers implements oapi.StrictServerInterface on top of the Domain.
 type handlers struct {
-	svc Trainer
+	svc Domain
 	log *slog.Logger
 }
 
@@ -140,6 +152,21 @@ func (h *handlers) ListPeople(ctx context.Context, _ oapi.ListPeopleRequestObjec
 		out[i] = toPerson(p)
 	}
 	return out, nil
+}
+
+func (h *handlers) PutPerson(ctx context.Context, req oapi.PutPersonRequestObject) (oapi.PutPersonResponseObject, error) {
+	in := fromPersonInput(req.Key, *req.Body)
+	created, err := h.svc.SavePerson(ctx, in)
+	switch {
+	case errors.Is(err, training.ErrInvalid):
+		return oapi.PutPerson400JSONResponse{BadRequestJSONResponse: oapi.BadRequestJSONResponse{Error: err.Error()}}, nil
+	case err != nil:
+		h.log.Error("save person", "person", req.Key, "err", err)
+		return oapi.PutPerson500JSONResponse{InternalErrorJSONResponse: internalError}, nil
+	case created:
+		return oapi.PutPerson201JSONResponse(toPerson(in.Person)), nil
+	}
+	return oapi.PutPerson200JSONResponse(toPerson(in.Person)), nil
 }
 
 func (h *handlers) GetToday(ctx context.Context, req oapi.GetTodayRequestObject) (oapi.GetTodayResponseObject, error) {

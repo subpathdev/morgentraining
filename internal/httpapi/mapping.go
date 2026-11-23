@@ -39,6 +39,13 @@ func toSession(s training.Session) oapi.Session {
 	return out
 }
 
+func fromPersonInput(key string, in oapi.PersonInput) training.PersonImport {
+	return training.PersonImport{
+		Person: training.Person{Key: key, Name: in.Name, Language: in.Language},
+		Plan:   in.Plan,
+	}
+}
+
 func fromRoundInput(in oapi.RoundInput) training.RoundInput {
 	out := training.RoundInput{
 		PlanVersionID: in.PlanVersionId,

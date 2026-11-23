@@ -67,6 +67,27 @@ func TestEndToEnd(t *testing.T) {
 		t.Fatalf("round: %d %+v", resp.StatusCode, st)
 	}
 
+	// A person added over the API gets the seeded plan in their language.
+	req, _ := http.NewRequest("PUT", srv.URL+"/api/people/mariana", strings.NewReader(`{"name":"Mariana","language":"en","plan":"morgen-5"}`))
+	req.Header.Set("Content-Type", "application/json")
+	put, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	put.Body.Close()
+	if put.StatusCode != 201 {
+		t.Fatalf("add person: %d", put.StatusCode)
+	}
+	var m struct {
+		Blocks []struct {
+			Name string `json:"name"`
+		} `json:"blocks"`
+	}
+	get(t, srv.URL+"/api/people/mariana/today", &m)
+	if len(m.Blocks) != 5 || m.Blocks[0].Name != "Warm-up" {
+		t.Fatalf("new person's plan: %+v", m)
+	}
+
 	page, err := http.Get(srv.URL + "/")
 	if err != nil {
 		t.Fatal(err)
