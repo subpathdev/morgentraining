@@ -1,6 +1,8 @@
 package httpapi
 
 import (
+	"maps"
+
 	"github.com/subpathdev/morgentraining/internal/httpapi/oapi"
 	"github.com/subpathdev/morgentraining/internal/training"
 )
@@ -59,4 +61,107 @@ func fromRoundInput(in oapi.RoundInput) training.RoundInput {
 		out.SkippedSteps = *in.SkippedSteps
 	}
 	return out
+}
+
+func toPlanSummary(pv training.PlanVersion) oapi.PlanSummary {
+	return oapi.PlanSummary{Key: pv.PlanKey, Names: toText(pv.Names), Version: pv.Version, TotalSeconds: pv.TotalSeconds()}
+}
+
+// toPlanDetail returns the version in the form it is edited in: the PUT body,
+// with the exercises it uses in the order the steps first use them.
+func toPlanDetail(pv training.PlanVersion) oapi.PlanDetail {
+	plan := oapi.PlanInput{Names: toText(pv.Names), Blocks: make([]oapi.BlockInput, len(pv.Blocks))}
+	var exercises []oapi.ExerciseInput
+	seen := map[string]bool{}
+	for i, b := range pv.Blocks {
+		block := oapi.BlockInput{Names: toText(b.Names), Summary: optText(b.Summaries), Steps: make([]oapi.StepInput, len(b.Steps))}
+		for j, s := range b.Steps {
+			step := oapi.StepInput{Exercise: s.Exercise, Seconds: s.Seconds, Names: optText(s.Names), Cues: optText(s.Cues)}
+			if s.Variant != "" {
+				step.Variant = &s.Variant
+			}
+			block.Steps[j] = step
+			if ex, ok := pv.Exercises[s.Exercise]; ok && !seen[s.Exercise] {
+				seen[s.Exercise] = true
+				exercises = append(exercises, toExerciseInput(ex))
+			}
+		}
+		plan.Blocks[i] = block
+	}
+	if len(exercises) > 0 {
+		plan.Exercises = &exercises
+	}
+	return oapi.PlanDetail{Key: pv.PlanKey, Version: pv.Version, TotalSeconds: pv.TotalSeconds(), Plan: plan}
+}
+
+func toExerciseInput(e training.Exercise) oapi.ExerciseInput {
+	kind := oapi.ExerciseInputKind(e.Kind)
+	out := oapi.ExerciseInput{Key: e.Key, Kind: &kind, Names: toText(e.Names), Cues: optText(e.Cues)}
+	if len(e.Variants) > 0 {
+		variants := make(map[string]oapi.Text, len(e.Variants))
+		for k, v := range e.Variants {
+			variants[k] = toText(v)
+		}
+		out.Variants = &variants
+	}
+	return out
+}
+
+func fromPlanInput(key string, in oapi.PlanInput) training.PlanImport {
+	imp := training.PlanImport{Plan: training.PlanSpec{Key: key, Names: fromText(in.Names), Blocks: make([]training.BlockSpec, len(in.Blocks))}}
+	if in.CreatedBy != nil {
+		imp.Plan.CreatedBy = *in.CreatedBy
+	}
+	if in.Exercises != nil {
+		for _, e := range *in.Exercises {
+			ex := training.Exercise{Key: e.Key, Kind: training.KindExercise, Names: fromText(e.Names), Cues: fromOptText(e.Cues)}
+			if e.Kind != nil {
+				ex.Kind = training.StepKind(*e.Kind)
+			}
+			if e.Variants != nil {
+				ex.Variants = make(map[string]training.Text, len(*e.Variants))
+				for k, v := range *e.Variants {
+					ex.Variants[k] = fromText(v)
+				}
+			}
+			imp.Exercises = append(imp.Exercises, ex)
+		}
+	}
+	for i, b := range in.Blocks {
+		block := training.BlockSpec{Names: fromText(b.Names), Summaries: fromOptText(b.Summary), Steps: make([]training.StepSpec, len(b.Steps))}
+		for j, s := range b.Steps {
+			step := training.StepSpec{Exercise: s.Exercise, Seconds: s.Seconds, Names: fromOptText(s.Names), Cues: fromOptText(s.Cues)}
+			if s.Variant != nil {
+				step.Variant = *s.Variant
+			}
+			block.Steps[j] = step
+		}
+		imp.Plan.Blocks[i] = block
+	}
+	return imp
+}
+
+func toText(t training.Text) oapi.Text {
+	if t == nil {
+		return oapi.Text{}
+	}
+	return oapi.Text(maps.Clone(t))
+}
+
+// optText leaves out an empty text, so a client sees only what the author wrote.
+func optText(t training.Text) *oapi.Text {
+	if len(t) == 0 {
+		return nil
+	}
+	out := toText(t)
+	return &out
+}
+
+func fromText(t oapi.Text) training.Text { return training.Text(maps.Clone(t)) }
+
+func fromOptText(t *oapi.Text) training.Text {
+	if t == nil {
+		return nil
+	}
+	return fromText(*t)
 }

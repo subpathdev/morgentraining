@@ -295,3 +295,31 @@ func planOn(t *testing.T, svc *training.Service, key, day string) string {
 	}
 	return s.Plan.Key
 }
+
+func TestPlansListTheNewestVersionOfEach(t *testing.T) {
+	svc, _ := newService(t, "2026-11-22")
+	seed(t, svc)
+	importFile(t, svc, []byte("plan: a-short\nnames: {de: Kurz}\nblocks:\n  - names: {de: Nur Aufwärmen}\n    steps: [{exercise: warmup, seconds: 30}]\n"))
+	longer := strings.Replace(string(seedFile(t, "plan-morgen-5.yaml")), "{exercise: half-squat, seconds: 60}", "{exercise: half-squat, seconds: 90}", 1)
+	importFile(t, svc, []byte(longer))
+
+	plans, err := svc.Plans(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(plans) != 2 || plans[0].PlanKey != "a-short" || plans[1].PlanKey != "morgen-5" {
+		t.Fatalf("want both plans ordered by key, got %+v", plans)
+	}
+	if plans[1].Version != 2 || plans[1].TotalSeconds() != 330 || plans[0].TotalSeconds() != 30 {
+		t.Fatalf("newest versions: %s v%d %ds, %s v%d %ds", plans[0].PlanKey, plans[0].Version, plans[0].TotalSeconds(),
+			plans[1].PlanKey, plans[1].Version, plans[1].TotalSeconds())
+	}
+
+	pv, err := svc.Plan(context.Background(), "morgen-5")
+	if err != nil || pv.Version != 2 || len(pv.Blocks) != 5 || pv.Exercises["push-up"].Variants["knees"]["de"] != "auf den Knien" {
+		t.Fatalf("plan: v%d %d blocks, push-up %+v, %v", pv.Version, len(pv.Blocks), pv.Exercises["push-up"], err)
+	}
+	if _, err := svc.Plan(context.Background(), "nope"); !errors.Is(err, training.ErrNotFound) {
+		t.Fatalf("unknown plan: %v", err)
+	}
+}

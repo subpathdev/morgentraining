@@ -155,6 +155,17 @@ type PlanVersion struct {
 	Exercises map[string]Exercise
 }
 
+// TotalSeconds is the sum of all steps.
+func (pv PlanVersion) TotalSeconds() int {
+	total := 0
+	for _, b := range pv.Blocks {
+		for _, s := range b.Steps {
+			total += s.Seconds
+		}
+	}
+	return total
+}
+
 // VersionRef identifies the newest version of a plan and its content hash.
 type VersionRef struct {
 	Version int

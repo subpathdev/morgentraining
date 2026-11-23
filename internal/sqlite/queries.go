@@ -118,6 +118,55 @@ func (r *repo) CreateVersion(ctx context.Context, spec training.PlanSpec, versio
 	return id, nil
 }
 
+func (r *repo) CurrentVersions(ctx context.Context) ([]training.PlanVersion, error) {
+	rows, err := r.q.QueryContext(ctx, `
+		SELECT pv.id, p.key, pv.version, pv.names
+		FROM plan p
+		JOIN plan_version pv ON pv.plan_id = p.id
+		WHERE pv.version = (SELECT MAX(version) FROM plan_version WHERE plan_id = p.id)
+		ORDER BY p.key`)
+	if err != nil {
+		return nil, err
+	}
+	var heads []versionRow
+	for rows.Next() {
+		var v versionRow
+		if err := rows.Scan(&v.ID, &v.PlanKey, &v.Version, &v.Names); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		heads = append(heads, v)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	// The rows are read before loading each version: one connection, no nested queries.
+	out := make([]training.PlanVersion, 0, len(heads))
+	for _, v := range heads {
+		pv, err := r.load(ctx, v)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, pv)
+	}
+	return out, nil
+}
+
+func (r *repo) CurrentVersion(ctx context.Context, planKey string) (training.PlanVersion, error) {
+	var v versionRow
+	err := r.q.QueryRowContext(ctx, `
+		SELECT pv.id, p.key, pv.version, pv.names
+		FROM plan p
+		JOIN plan_version pv ON pv.plan_id = p.id
+		WHERE p.key = ?
+		ORDER BY pv.version DESC LIMIT 1`, planKey).
+		Scan(&v.ID, &v.PlanKey, &v.Version, &v.Names)
+	if err != nil {
+		return training.PlanVersion{}, notFound(err, "plan "+planKey)
+	}
+	return r.load(ctx, v)
+}
+
 // AssignedVersion follows progression 'latest': the newest version of the assigned plan.
 func (r *repo) AssignedVersion(ctx context.Context, personKey string, day training.Date) (training.PlanVersion, error) {
 	var v versionRow
@@ -133,6 +182,11 @@ func (r *repo) AssignedVersion(ctx context.Context, personKey string, day traini
 	if err != nil {
 		return training.PlanVersion{}, notFound(err, "plan of "+personKey)
 	}
+	return r.load(ctx, v)
+}
+
+// load reads the blocks, steps and exercises of a plan version.
+func (r *repo) load(ctx context.Context, v versionRow) (training.PlanVersion, error) {
 	blocks, steps, err := r.blocks(ctx, v.ID)
 	if err != nil {
 		return training.PlanVersion{}, fmt.Errorf("plan version %d: %w", v.ID, err)

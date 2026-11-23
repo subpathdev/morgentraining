@@ -40,10 +40,18 @@ type PeopleEditor interface {
 	SavePerson(ctx context.Context, p training.PersonImport) (created bool, err error)
 }
 
+// PlanEditor is what the handlers need to read plans and save new versions.
+type PlanEditor interface {
+	Plans(ctx context.Context) ([]training.PlanVersion, error)
+	Plan(ctx context.Context, key string) (training.PlanVersion, error)
+	ImportPlan(ctx context.Context, imp training.PlanImport) (training.PlanResult, error)
+}
+
 // Domain is everything the handlers need. *training.Service implements it.
 type Domain interface {
 	Trainer
 	PeopleEditor
+	PlanEditor
 }
 
 var _ Domain = (*training.Service)(nil)
@@ -167,6 +175,47 @@ func (h *handlers) PutPerson(ctx context.Context, req oapi.PutPersonRequestObjec
 		return oapi.PutPerson201JSONResponse(toPerson(in.Person)), nil
 	}
 	return oapi.PutPerson200JSONResponse(toPerson(in.Person)), nil
+}
+
+func (h *handlers) ListPlans(ctx context.Context, _ oapi.ListPlansRequestObject) (oapi.ListPlansResponseObject, error) {
+	plans, err := h.svc.Plans(ctx)
+	if err != nil {
+		h.log.Error("list plans", "err", err)
+		return oapi.ListPlans500JSONResponse{InternalErrorJSONResponse: internalError}, nil
+	}
+	out := make(oapi.ListPlans200JSONResponse, len(plans))
+	for i, pv := range plans {
+		out[i] = toPlanSummary(pv)
+	}
+	return out, nil
+}
+
+func (h *handlers) GetPlan(ctx context.Context, req oapi.GetPlanRequestObject) (oapi.GetPlanResponseObject, error) {
+	pv, err := h.svc.Plan(ctx, req.Key)
+	switch {
+	case errors.Is(err, training.ErrNotFound):
+		return oapi.GetPlan404JSONResponse{NotFoundJSONResponse: oapi.NotFoundJSONResponse{Error: err.Error()}}, nil
+	case err != nil:
+		h.log.Error("get plan", "plan", req.Key, "err", err)
+		return oapi.GetPlan500JSONResponse{InternalErrorJSONResponse: internalError}, nil
+	}
+	return oapi.GetPlan200JSONResponse(toPlanDetail(pv)), nil
+}
+
+func (h *handlers) PutPlan(ctx context.Context, req oapi.PutPlanRequestObject) (oapi.PutPlanResponseObject, error) {
+	res, err := h.svc.ImportPlan(ctx, fromPlanInput(req.Key, *req.Body))
+	switch {
+	case errors.Is(err, training.ErrInvalid):
+		return oapi.PutPlan400JSONResponse{BadRequestJSONResponse: oapi.BadRequestJSONResponse{Error: err.Error()}}, nil
+	case err != nil:
+		h.log.Error("save plan", "plan", req.Key, "err", err)
+		return oapi.PutPlan500JSONResponse{InternalErrorJSONResponse: internalError}, nil
+	}
+	saved := oapi.PlanSaved{Key: res.PlanKey, Version: res.Version, Changed: res.Created}
+	if res.Created && res.Version == 1 {
+		return oapi.PutPlan201JSONResponse(saved), nil
+	}
+	return oapi.PutPlan200JSONResponse(saved), nil
 }
 
 func (h *handlers) GetToday(ctx context.Context, req oapi.GetTodayRequestObject) (oapi.GetTodayResponseObject, error) {

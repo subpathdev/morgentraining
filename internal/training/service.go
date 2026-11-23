@@ -7,9 +7,20 @@ import (
 	"time"
 )
 
+// PlanCatalog reads saved plans. Methods return ErrNotFound (possibly wrapped)
+// when the plan doesn't exist.
+type PlanCatalog interface {
+	// CurrentVersions returns the newest version of every plan, ordered by plan key.
+	CurrentVersions(ctx context.Context) ([]PlanVersion, error)
+	// CurrentVersion returns the newest version of one plan.
+	CurrentVersion(ctx context.Context, planKey string) (PlanVersion, error)
+}
+
 // Repository is the storage the Service needs. Methods return ErrNotFound
 // (possibly wrapped) when the thing asked for doesn't exist.
 type Repository interface {
+	PlanCatalog
+
 	// Atomic runs fn in one transaction: all of fn's writes are kept, or none.
 	// The Repository passed to fn must be used inside fn instead of the outer one.
 	Atomic(ctx context.Context, fn func(Repository) error) error
@@ -89,6 +100,16 @@ func (s *Service) Session(ctx context.Context, personKey string, day Date) (Sess
 	}
 	plan, blocks := pv.Localize(p.Language)
 	return Session{Person: p, Plan: plan, Blocks: blocks, Stats: ComputeStats(days, day)}, nil
+}
+
+// Plans returns the newest version of every plan, ordered by key.
+func (s *Service) Plans(ctx context.Context) ([]PlanVersion, error) {
+	return s.repo.CurrentVersions(ctx)
+}
+
+// Plan returns the newest version of a plan, with the exercises it uses.
+func (s *Service) Plan(ctx context.Context, key string) (PlanVersion, error) {
+	return s.repo.CurrentVersion(ctx, key)
 }
 
 // RoundInput is a round as reported by the page.
