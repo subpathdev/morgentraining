@@ -123,11 +123,18 @@ docker run -p 8080:8080 -v morgentraining:/data morgentraining
 
 Settings (environment): `MT_ADDR` (default `:8080`), `MT_DB` (`/data/morgentraining.db` in the image), `MT_TZ` (`Europe/Berlin`, used for "today" when the page doesn't send a date). The image runs as uid 65532, so the volume must be writable for that user.
 
-Released images are on `ghcr.io/subpathdev/morgentraining:<version>`, and a Helm chart with the same version on `oci://ghcr.io/subpathdev/charts/morgentraining` ([`charts/morgentraining`](charts/morgentraining), settings in its [`values.yaml`](charts/morgentraining/values.yaml)). The chart runs one pod with the database on a volume that is kept when the release is uninstalled, a nightly backup into that volume (7 days, by weekday), and optionally an HTTPRoute and alerts. To release, tag `main` and push the tag; CI tests, pushes the image and the chart, and creates a GitHub release:
+Released images are on `ghcr.io/subpathdev/morgentraining:<version>`, and a Helm chart with the same version on `oci://ghcr.io/subpathdev/charts/morgentraining` ([`charts/morgentraining`](charts/morgentraining), settings in its [`values.yaml`](charts/morgentraining/values.yaml)). The chart runs one pod with the database on a volume that is kept when the release is uninstalled, a nightly backup into that volume (7 days, by weekday), and optionally an HTTPRoute and alerts.
 
-```bash
-git tag v0.1.0 && git push origin v0.1.0
-```
+Releases are automatic. Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/) (`type(scope): summary`), and CI checks every commit a PR adds. On each push to `main`, [svu](https://github.com/caarlos0/svu) works out the next version from the commits since the last tag:
+
+| Commit | Release |
+| :--- | :--- |
+| `feat: …` | minor (0.3.0 → 0.4.0) |
+| `fix: …` | patch (0.3.0 → 0.3.1) |
+| `perf:`, `docs:`, `ci:`, `chore:`, `refactor:`, `test:`, `build:`, `style:`, `revert:` | none (use `fix:` for a change users should get) |
+| `feat!: …` or a `BREAKING CHANGE:` footer | major, but a minor bump while the version is 0.x |
+
+If there is a new version, CI pushes the image, then the chart, then creates the tag and the GitHub release. Merge PRs with a merge commit (or make the squash message conventional), because svu reads the commit messages on `main`.
 
 The home cluster runs it from `clusters/smart-home/morgentraining` in `subpathdev/smart-home`, where Renovate opens a PR for each new version.
 
