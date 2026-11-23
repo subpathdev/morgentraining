@@ -4,7 +4,7 @@ WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/morgentraining .
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/morgentraining ./cmd/morgentraining
 
 FROM gcr.io/distroless/static-debian12:nonroot
 COPY --from=build /out/morgentraining /morgentraining

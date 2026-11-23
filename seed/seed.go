@@ -3,7 +3,7 @@ package seed
 
 import "embed"
 
-// Files holds plan-*.yaml (imported first) and people.yaml.
+// Files holds the plan and people files; plans are imported before people.
 //
 //go:embed *.yaml
 var Files embed.FS
