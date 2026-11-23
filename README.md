@@ -14,6 +14,15 @@ Open <http://127.0.0.1:8080>. On first start with an empty database, the plans a
 
 > The browser only keeps the screen on (Wake Lock API) on HTTPS pages or `localhost`. On a phone, serve it over HTTPS.
 
+## Managing people and plans
+
+The page **Verwalten** (`/verwalten.html`, linked from the start page and next to "Wechseln") is for adding people and changing their name, language and plan, and for editing plans:
+- change blocks and steps (exercise, seconds, own name), reorder or delete them
+- add exercises to the shared library
+- start a new plan from an existing one
+
+Saving a changed plan creates a new version; saving without a change does nothing. Like the rest of the page it has no login: anyone who can reach it can change people and plans. Its labels are German; error messages from the server are English.
+
 ## Plans
 
 A plan is a list of **blocks** (one item in the list and one segment of the ring). Each block has **steps** that point to exercises in a shared library. Exercise kinds: `exercise`, `rest` (a short break inside a block) and `breath` (shows breathe in / breathe out). Names and cues are given per language (`de`, `en`, …), and each person sees their own language, falling back to German, then English.

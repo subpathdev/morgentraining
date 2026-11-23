@@ -54,6 +54,7 @@ li p{margin:0;font-size:14px;color:var(--soft)}
 li.done h3{color:var(--soft)}
 li .d{font-size:14px;color:var(--soft);white-space:nowrap;padding-top:4px}
 .tip{font-size:13px;color:var(--soft);margin-top:20px;text-align:center}
+.tip a,a.linkbtn{color:var(--soft)}
 .msg{font-size:14px;color:var(--warn);text-align:center;min-height:0;margin:8px 0 0}
 .people{display:grid;gap:12px;margin-top:28px}
 .people button{min-height:64px;font-size:20px;font-weight:700;border-radius:18px;justify-content:flex-start;padding:0 22px}
@@ -67,12 +68,13 @@ li .d{font-size:14px;color:var(--soft);white-space:nowrap;padding-top:4px}
     <h1 id="pickTitle">Wer trainiert?</h1>
     <div class="people" id="people"></div>
     <p class="msg" id="pickMsg"></p>
+    <p class="tip"><a href="verwalten.html" id="manage">Personen und Pläne verwalten</a></p>
   </section>
 
   <section id="run" hidden>
     <header>
       <h1 id="title">Morgentraining</h1>
-      <div class="who"><b id="who"></b><button class="linkbtn" id="switch">Wechseln</button></div>
+      <div class="who"><b id="who"></b><button class="linkbtn" id="switch">Wechseln</button><a class="linkbtn" href="verwalten.html" id="manage2">Verwalten</a></div>
     </header>
     <div class="streak" id="streak"></div>
 
@@ -126,7 +128,7 @@ const T={
   sound:"Töne",vib:"Vibration",prep:"5 s Vorlauf",rest:"Pause zwischen Übungen",none:"keine",vol:"Töne",volN:"normal",volL:"laut",volXL:"sehr laut",
   restNote:"Die neue Pausenlänge gilt ab der nächsten Runde.",tip:"Leertaste startet und pausiert. Lass den Bildschirm an, damit der Timer weiterläuft.",
   back:"Zurück zur vorherigen Übung",skip:"Zur nächsten Übung",min:"Min",offline:"Runde lokal gemerkt, sie wird später übertragen.",
-  noServer:"Server nicht erreichbar. Bist du im WLAN zu Hause?",noPlan:"Für dich ist heute kein Plan eingetragen."},
+  noServer:"Server nicht erreichbar. Bist du im WLAN zu Hause?",noPlan:"Für dich ist heute kein Plan eingetragen.",manage:"Personen und Pläne verwalten",manage2:"Verwalten"},
  en:{who:"Who's training?",switch:"Switch",ready:"Ready?",soon:"Here we go",getReady:"Get ready",morning:"Good morning",
   first:"First: ",next:"Next: ",nextDone:"Next: done",shake:"Stand up and shake out your arms.",
   intro:n=>`${n} ${n===1?"exercise":"exercises"}. Tap Start.`,pause:"Rest",recover:"Catch your breath",exOf:(a,b)=>`Exercise ${a} of ${b}`,
@@ -137,7 +139,7 @@ const T={
   sound:"Sounds",vib:"Vibration",prep:"5 s lead-in",rest:"Rest between exercises",none:"none",vol:"Volume",volN:"normal",volL:"loud",volXL:"very loud",
   restNote:"The new rest length applies from the next round.",tip:"Space starts and pauses. Keep the screen on so the timer keeps running.",
   back:"Back to the previous exercise",skip:"Next exercise",min:"min",offline:"Round kept on this device; it will be sent later.",
-  noServer:"Can't reach the server. Are you on the home Wi-Fi?",noPlan:"There is no plan for you today."}};
+  noServer:"Can't reach the server. Are you on the home Wi-Fi?",noPlan:"There is no plan for you today.",manage:"Manage people and plans",manage2:"Manage"}};
 let L=T.de;
 const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -164,7 +166,7 @@ function showStreak(st){
 function applyLang(lang){
  L=T[lang]||T.de;document.documentElement.lang=T[lang]?lang:"de";
  const set=(id,t)=>$(id).textContent=t;
- set("pickTitle",L.who);set("switch",L.switch);set("tSound",L.sound);set("tVib",L.vib);set("tPrep",L.prep);set("tRest",L.rest);set("tNone",L.none);
+ set("pickTitle",L.who);set("switch",L.switch);set("manage",L.manage);set("manage2",L.manage2);set("tSound",L.sound);set("tVib",L.vib);set("tPrep",L.prep);set("tRest",L.rest);set("tNone",L.none);
  set("tVol",L.vol);set("tVolN",L.volN);set("tVolL",L.volL);set("tVolXL",L.volXL);set("restNote",L.restNote);set("tip",L.tip);
  $("back").setAttribute("aria-label",L.back);$("skip").setAttribute("aria-label",L.skip);
 }

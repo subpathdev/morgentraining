@@ -119,6 +119,15 @@ func TestEndToEnd(t *testing.T) {
 	if !bytes.Contains(b, []byte("sunbox")) || bytes.Contains(b, []byte("googleapis")) {
 		t.Fatal("the page must be served and load nothing from outside the home network")
 	}
+	manage, err := http.Get(srv.URL + "/verwalten.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, _ = io.ReadAll(manage.Body)
+	manage.Body.Close()
+	if manage.StatusCode != 200 || !bytes.Contains(b, []byte("/api/plans")) || bytes.Contains(b, []byte("https://")) {
+		t.Fatalf("the manage page must be served and load nothing from outside: %d", manage.StatusCode)
+	}
 }
 
 func putJSON(t *testing.T, url, body string) (int, map[string]any) {

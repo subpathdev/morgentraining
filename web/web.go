@@ -3,5 +3,5 @@ package web
 
 import "embed"
 
-//go:embed index.html manifest.webmanifest icon.svg
+//go:embed index.html verwalten.html manifest.webmanifest icon.svg
 var Files embed.FS
