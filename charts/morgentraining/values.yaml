@@ -1,0 +1,59 @@
+image:
+  repository: ghcr.io/subpathdev/morgentraining
+  # Defaults to the chart's appVersion.
+  tag: ""
+  pullPolicy: IfNotPresent
+
+# Decides which day "today" is when the page sends no date (MT_TZ).
+timeZone: Europe/Berlin
+
+# The SQLite file lives here. Plans and people are not in Git, so this volume is
+# the only copy of them: the claim is kept when the release is uninstalled.
+persistence:
+  # Use a claim that already exists instead of creating <release>-data.
+  existingClaim: ""
+  # Empty uses the cluster's default StorageClass.
+  storageClass: ""
+  size: 1Gi
+
+service:
+  port: 8080
+
+# Gateway API route. HTTPS is needed for the page to keep a phone's screen on.
+httpRoute:
+  enabled: false
+  # - name: home
+  #   namespace: home-gateway
+  #   sectionName: https
+  parentRefs: []
+  # - morgen.example.org
+  hostnames: []
+
+# A consistent copy of the database every night (the app's `backup` command),
+# kept as <volume>/backups/morgentraining-<Mon..Sun>.db, so 7 days back. It is in
+# the same volume: it helps after a bad import or an app bug, not if the disk is lost.
+backup:
+  enabled: true
+  schedule: "30 3 * * *"
+  # Time zone of the schedule. Empty means the controller's (usually UTC).
+  timeZone: Europe/Berlin
+  # Moves the copy to its weekday name. The app image has no shell.
+  rotateImage:
+    repository: busybox
+    tag: 1.37.0
+
+# Alerts for the Prometheus Operator: page down for 15 min, last backup over 2 days
+# old. They use kube-state-metrics; the app has no /metrics.
+prometheusRule:
+  enabled: false
+  # Labels Prometheus selects rules by.
+  labels: {}
+  runbookUrl: ""
+
+resources:
+  requests:
+    cpu: 5m
+    memory: 32Mi
+  limits:
+    cpu: 200m
+    memory: 128Mi

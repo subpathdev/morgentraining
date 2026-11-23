@@ -1,0 +1,9 @@
+apiVersion: v2
+name: morgentraining
+description: Five-minute morning workout page with per-person plans, rounds and streaks, kept in one SQLite file.
+type: application
+# Both are set from the release tag when CI packages the chart.
+version: 0.0.0
+appVersion: 0.0.0
+sources:
+  - https://github.com/subpathdev/morgentraining

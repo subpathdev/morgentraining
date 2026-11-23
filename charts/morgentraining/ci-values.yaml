@@ -1,0 +1,18 @@
+# Used by CI to render the chart with everything turned on.
+image:
+  tag: 0.1.0
+persistence:
+  storageClass: local-path
+httpRoute:
+  enabled: true
+  parentRefs:
+    - name: home
+      namespace: home-gateway
+      sectionName: https
+  hostnames:
+    - morgen.example.org
+prometheusRule:
+  enabled: true
+  labels:
+    release: kube-prometheus-stack
+  runbookUrl: https://example.org/runbook

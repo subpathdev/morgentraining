@@ -120,13 +120,20 @@ docker run -p 8080:8080 -v morgentraining:/data morgentraining
 
 Settings (environment): `MT_ADDR` (default `:8080`), `MT_DB` (`/data/morgentraining.db` in the image), `MT_TZ` (`Europe/Berlin`, used for "today" when the page doesn't send a date). The image runs as uid 65532, so the volume must be writable for that user.
 
-Released images are on `ghcr.io/subpathdev/morgentraining:<version>`. To release, tag `main` and push the tag; CI tests, builds and pushes the image and creates a GitHub release:
+Released images are on `ghcr.io/subpathdev/morgentraining:<version>`, and a Helm chart with the same version on `oci://ghcr.io/subpathdev/charts/morgentraining` ([`charts/morgentraining`](charts/morgentraining), settings in its [`values.yaml`](charts/morgentraining/values.yaml)). The chart runs one pod with the database on a volume that is kept when the release is uninstalled, a nightly backup into that volume (7 days, by weekday), and optionally an HTTPRoute and alerts. To release, tag `main` and push the tag; CI tests, pushes the image and the chart, and creates a GitHub release:
 
 ```bash
 git tag v0.1.0 && git push origin v0.1.0
 ```
 
 The home cluster runs it from `clusters/smart-home/morgentraining` in `subpathdev/smart-home`, where Renovate opens a PR for each new version.
+
+Check the chart after changing it (CI does the same):
+
+```bash
+helm lint charts/morgentraining -f charts/morgentraining/ci-values.yaml
+helm template test charts/morgentraining -f charts/morgentraining/ci-values.yaml
+```
 
 Run exactly **one** instance per database file. Back up with a consistent copy while it runs:
 
