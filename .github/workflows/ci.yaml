@@ -1,15 +1,17 @@
-# Tests every PR and push to main. Pushing a version tag (v0.1.0, v0.2.0, ...)
-# also releases, all with the version without the v: the image
-# ghcr.io/subpathdev/morgentraining:<version>, the Helm chart
-# oci://ghcr.io/subpathdev/charts/morgentraining:<version> and a GitHub release.
-# The smart-home repo deploys the chart; Renovate opens the bump PR there.
+# Tests every PR and push to main. A push to main also releases: svu works out
+# the next version from the conventional commits since the last tag, and if
+# there is one, the image ghcr.io/subpathdev/morgentraining:<version>, the Helm
+# chart oci://ghcr.io/subpathdev/charts/morgentraining:<version>, the tag and
+# the GitHub release are created. The smart-home repo deploys the chart;
+# Renovate opens the bump PR there.
+# feat: is a minor bump, fix: a patch, and docs:, ci:, chore: and the like don't
+# release. While the version is 0.x, a breaking change is a minor bump too.
 name: ci
 
 on:
   pull_request:
   push:
     branches: [main]
-    tags: ["v*"]
 
 permissions:
   contents: read
@@ -39,6 +41,33 @@ jobs:
       - run: helm lint charts/morgentraining -f charts/morgentraining/ci-values.yaml
       - run: helm template test charts/morgentraining -f charts/morgentraining/ci-values.yaml
 
+  # Every commit a PR adds must be a conventional commit, or svu can't work out
+  # the next version from it. Merge commits are left out.
+  commits:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Check the commit messages
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          pattern='^(feat|fix|docs|ci|chore|refactor|test|build|perf|style|revert)(\([a-z0-9._/-]+\))?!?: .+'
+          bad=0
+          while IFS= read -r line; do
+            if ! [[ "${line#* }" =~ $pattern ]]; then
+              echo "::error::not a conventional commit: $line"
+              bad=1
+            fi
+          done < <(git log --no-merges --format='%h %s' "$BASE..$HEAD")
+          if [ "$bad" = 1 ]; then
+            echo "Use type(scope): summary, e.g. 'feat(page): add a pause button' or 'fix: keep the streak at midnight'. See CLAUDE.md."
+          fi
+          exit "$bad"
+
   # Builds without pushing, so a broken Dockerfile shows up in the PR.
   image:
     if: github.event_name == 'pull_request'
@@ -52,49 +81,67 @@ jobs:
           push: false
 
   release:
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: github.event_name == 'push'
     needs: [test, chart]
     runs-on: ubuntu-latest
+    # Two quick merges must not work out the same version.
+    concurrency: release
     permissions:
       contents: write
       packages: write
     steps:
       - uses: actions/checkout@v7
-      - name: Version from the tag
-        id: version
+        with:
+          # svu needs the commits and tags since the last release.
+          fetch-depth: 0
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Work out the next version
+        id: next
         run: |
-          tag="${GITHUB_REF_NAME}"
-          if ! [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "::error::tag $tag is not vMAJOR.MINOR.PATCH"
-            exit 1
+          go install github.com/caarlos0/svu/v3@v3.4.1
+          tag="$("$(go env GOPATH)/bin/svu" next)"
+          if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+            echo "Nothing to release, still at $tag."
+            exit 0
           fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
       - uses: docker/login-action@v4
+        if: steps.next.outputs.tag != ''
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      # The image goes first: if it fails there's no tag, and the next push retries.
       - uses: docker/build-push-action@v7
+        if: steps.next.outputs.tag != ''
         with:
           context: .
           push: true
-          tags: ghcr.io/subpathdev/morgentraining:${{ steps.version.outputs.version }}
+          tags: ghcr.io/subpathdev/morgentraining:${{ steps.next.outputs.version }}
           labels: |
             org.opencontainers.image.source=https://github.com/subpathdev/morgentraining
-            org.opencontainers.image.version=${{ steps.version.outputs.version }}
+            org.opencontainers.image.version=${{ steps.next.outputs.version }}
       # After the image, so a published chart never points to a missing image.
       - uses: azure/setup-helm@v5
+        if: steps.next.outputs.tag != ''
         with:
           version: v4.3.1
       - name: Publish the chart
+        if: steps.next.outputs.tag != ''
         env:
-          VERSION: ${{ steps.version.outputs.version }}
+          VERSION: ${{ steps.next.outputs.version }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           echo "$GH_TOKEN" | helm registry login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
           helm package charts/morgentraining --version "$VERSION" --app-version "$VERSION"
           helm push "morgentraining-$VERSION.tgz" oci://ghcr.io/subpathdev/charts
+      # Creates the tag, so a failed image or chart leaves no tag and the next push retries.
       - name: Create the release
+        if: steps.next.outputs.tag != ''
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes
+          TAG: ${{ steps.next.outputs.tag }}
+        run: gh release create "$TAG" --target "$GITHUB_SHA" --generate-notes

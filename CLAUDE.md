@@ -45,4 +45,5 @@ Jan reads this code as production Go, even for a home project. Follow these from
 ### Working rules
 
 - Technical text (code, comments, commits, PRs, docs) in English, even for a German UI.
+- Commit messages are [Conventional Commits](https://www.conventionalcommits.org/): `type(scope): summary` with type `feat`, `fix`, `perf`, `docs`, `ci`, `chore`, `refactor`, `test`, `build`, `style` or `revert`, lowercase scope, `!` for a breaking change. CI rejects a PR with any other commit, and the release version comes from them (`feat` minor, `fix` patch, the rest no release): README → **Container**.
 - Don't commit, push or merge without Jan's OK.
