@@ -1,16 +1,17 @@
 openapi: 3.0.3
 info:
   title: Morgentraining API
-  version: 1.0.0
+  version: 1.1.0
   description: |
     API behind the Morgentraining page: people, their plan for today, and finished rounds.
 
     There is no authentication. The service is meant for a home network behind a gateway
     that limits access (later an OIDC proxy that tells the service who is signed in).
+    Anyone who can reach the API can add or change people, just as they can record rounds.
 
     Plans are versioned. A saved plan version never changes, and every round points to the
-    version it used. Plans and people are changed with the `morgentraining import` command,
-    not through this API (yet).
+    version it used. Plans are changed with the `morgentraining import` command; people can
+    also be added or changed through this API.
 servers:
   - url: /
 tags:
@@ -47,6 +48,41 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/Person"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/people/{key}:
+    parameters:
+      - $ref: "#/components/parameters/PersonKey"
+    put:
+      operationId: putPerson
+      tags: [people]
+      summary: Add a person, or change their name, language or plan
+      description: |
+        Works like importing a people file with this one person: an unknown key adds the
+        person, a known key updates them. A changed plan applies from today (in the server's
+        time zone); earlier days keep the plan they had. Nobody is deleted.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PersonInput"
+      responses:
+        "200":
+          description: The person existed and was updated (or was already like this).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Person"
+        "201":
+          description: The person was added.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Person"
+        "400":
+          $ref: "#/components/responses/BadRequest"
         "500":
           $ref: "#/components/responses/InternalError"
 
@@ -268,6 +304,28 @@ components:
           description: Days with at least one completed round.
         doneToday:
           type: boolean
+
+    PersonInput:
+      type: object
+      description: A person as sent to `PUT /api/people/{key}`; the key is in the path.
+      required: [name, language, plan]
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          example: Mariana
+        language:
+          type: string
+          pattern: "^[a-z]{2,3}$"
+          description: Language code for texts, e.g. `de` or `en`. Texts fall back to German, then English.
+          example: en
+        plan:
+          type: string
+          pattern: "^[a-z0-9_-]{1,64}$"
+          description: Key of an imported plan the person follows from today.
+          example: morgen-5
 
     RoundInput:
       type: object

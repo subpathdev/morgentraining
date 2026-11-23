@@ -238,3 +238,60 @@ func TestUnknownPlanInPeopleFileSavesNothing(t *testing.T) {
 		t.Fatalf("the import must be all or nothing, got %+v", people)
 	}
 }
+
+func TestSavePersonAddsThenUpdates(t *testing.T) {
+	svc, c := newService(t, "2026-11-20")
+	seed(t, svc)
+	importFile(t, svc, []byte("plan: short\nnames: {de: Kurz}\nblocks:\n  - names: {de: Nur Aufwärmen}\n    steps: [{exercise: warmup, seconds: 30}]\n"))
+	ctx := context.Background()
+
+	mariana := training.PersonImport{Person: training.Person{Key: "mariana", Name: "Mariana", Language: "en"}, Plan: "morgen-5"}
+	if created, err := svc.SavePerson(ctx, mariana); err != nil || !created {
+		t.Fatalf("first save: created=%v err=%v", created, err)
+	}
+	s, err := svc.Session(ctx, "mariana", mustDay("2026-11-20"))
+	if err != nil || s.Plan.Key != "morgen-5" || s.Blocks[0].Name != "Warm-up" {
+		t.Fatalf("new person's session: %+v %v", s.Plan, err)
+	}
+
+	// A later save with another plan switches from that day; earlier days keep the old plan.
+	c.set("2026-11-22")
+	mariana.Person.Name, mariana.Plan = "Mari", "short"
+	if created, err := svc.SavePerson(ctx, mariana); err != nil || created {
+		t.Fatalf("second save: created=%v err=%v", created, err)
+	}
+	if before, after := planOn(t, svc, "mariana", "2026-11-21"), planOn(t, svc, "mariana", "2026-11-22"); before != "morgen-5" || after != "short" {
+		t.Fatalf("plan on 21st %s, on 22nd %s", before, after)
+	}
+	people, _ := svc.People(ctx)
+	if len(people) != 2 || people[1].Name != "Mari" {
+		t.Fatalf("people: %+v", people)
+	}
+}
+
+func TestSavePersonRejectsBadInputAndSavesNothing(t *testing.T) {
+	svc, _ := newService(t, "2026-11-22")
+	seed(t, svc)
+	ctx := context.Background()
+	for name, p := range map[string]training.PersonImport{
+		"unknown plan": {Person: training.Person{Key: "x", Name: "X", Language: "de"}, Plan: "nope"},
+		"no name":      {Person: training.Person{Key: "x", Language: "de"}, Plan: "morgen-5"},
+		"bad key":      {Person: training.Person{Key: "X Y", Name: "X", Language: "de"}, Plan: "morgen-5"},
+	} {
+		if _, err := svc.SavePerson(ctx, p); !errors.Is(err, training.ErrInvalid) {
+			t.Errorf("%s: want ErrInvalid, got %v", name, err)
+		}
+	}
+	if people, _ := svc.People(ctx); len(people) != 1 {
+		t.Fatalf("nothing may be saved from invalid input, got %+v", people)
+	}
+}
+
+func planOn(t *testing.T, svc *training.Service, key, day string) string {
+	t.Helper()
+	s, err := svc.Session(context.Background(), key, mustDay(day))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return s.Plan.Key
+}

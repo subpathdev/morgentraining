@@ -29,9 +29,12 @@ type fakeTrainer struct {
 	stats   training.Stats
 	err     error
 
-	gotKey   string
-	gotDay   training.Date
-	gotRound training.RoundInput
+	created bool
+
+	gotKey    string
+	gotDay    training.Date
+	gotRound  training.RoundInput
+	gotPerson training.PersonImport
 }
 
 func (f *fakeTrainer) Today() training.Date { return f.today }
@@ -46,6 +49,11 @@ func (f *fakeTrainer) Session(_ context.Context, key string, day training.Date) 
 func (f *fakeTrainer) RecordRound(_ context.Context, key string, in training.RoundInput) (training.Stats, error) {
 	f.gotKey, f.gotRound = key, in
 	return f.stats, f.err
+}
+
+func (f *fakeTrainer) SavePerson(_ context.Context, p training.PersonImport) (bool, error) {
+	f.gotKey, f.gotPerson = p.Person.Key, p
+	return f.created, f.err
 }
 
 var page = fstest.MapFS{"index.html": {Data: []byte("<!doctype html><div id=sunbox></div>")}}
@@ -64,7 +72,7 @@ func sampleSession() training.Session {
 
 // server starts the handler, wrapped so that every API response is checked
 // against the OpenAPI spec. A response that doesn't match the spec fails the test.
-func server(t *testing.T, svc Trainer) *httptest.Server {
+func server(t *testing.T, svc Domain) *httptest.Server {
 	t.Helper()
 	h, err := New(svc, Options{Static: page})
 	if err != nil {
@@ -186,8 +194,27 @@ func TestAddRoundMapsTheInput(t *testing.T) {
 	}
 }
 
+func TestPutPersonMapsTheInput(t *testing.T) {
+	for _, c := range []struct {
+		created bool
+		code    int
+	}{{true, 201}, {false, 200}} {
+		fake := &fakeTrainer{created: c.created}
+		var got oapi.Person
+		call(t, "PUT", server(t, fake).URL+"/api/people/mariana", `{"name":"Mariana","language":"en","plan":"morgen-5"}`, c.code, &got)
+		want := training.PersonImport{Person: training.Person{Key: "mariana", Name: "Mariana", Language: "en"}, Plan: "morgen-5"}
+		if fake.gotPerson != want {
+			t.Fatalf("person passed to the service: %+v", fake.gotPerson)
+		}
+		if got != (oapi.Person{Key: "mariana", Name: "Mariana", Language: "en"}) {
+			t.Fatalf("response: %+v", got)
+		}
+	}
+}
+
 func TestDomainErrorsBecomeStatusCodes(t *testing.T) {
 	round := `{"planVersionId":1,"date":"2026-11-22","completed":true}`
+	person := `{"name":"X","language":"de","plan":"nope"}`
 	cases := []struct {
 		name         string
 		err          error
@@ -201,6 +228,8 @@ func TestDomainErrorsBecomeStatusCodes(t *testing.T) {
 		{"invalid round", &training.ValidationError{Problems: []string{"unknown plan version 1"}}, "POST", "/api/people/jan/rounds", round, 400, "unknown plan version 1"},
 		{"storage failure is hidden", errors.New("disk on fire"), "GET", "/api/people/jan/today", "", 500, "internal error"},
 		{"storage failure on list", errors.New("disk on fire"), "GET", "/api/people", "", 500, "internal error"},
+		{"unknown plan for person", &training.ValidationError{Problems: []string{`person x: unknown plan "nope"`}}, "PUT", "/api/people/x", person, 400, `unknown plan "nope"`},
+		{"storage failure on save", errors.New("disk on fire"), "PUT", "/api/people/x", person, 500, "internal error"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -226,6 +255,11 @@ func TestRequestsAreValidatedAgainstSpec(t *testing.T) {
 		{"not JSON", "POST", "/api/people/jan/rounds", `hello`, 400},
 		{"too large", "POST", "/api/people/jan/rounds", `{"planVersionId":1,"date":"2026-11-22","completed":true,"skippedSteps":[` + strings.Repeat("1,", maxBody) + `1]}`, 400},
 		{"unknown path", "GET", "/api/nothing", "", 404},
+		{"person without plan", "PUT", "/api/people/mariana", `{"name":"Mariana","language":"en"}`, 400},
+		{"person with empty name", "PUT", "/api/people/mariana", `{"name":"","language":"en","plan":"morgen-5"}`, 400},
+		{"person with bad language", "PUT", "/api/people/mariana", `{"name":"Mariana","language":"English","plan":"morgen-5"}`, 400},
+		{"person with unknown field", "PUT", "/api/people/mariana", `{"name":"Mariana","language":"en","plan":"morgen-5","admin":true}`, 400},
+		{"person with bad key", "PUT", "/api/people/Mariana", `{"name":"Mariana","language":"en","plan":"morgen-5"}`, 400},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -257,9 +291,9 @@ func TestPageSpecAndHealthAreServed(t *testing.T) {
 	}
 }
 
-func TestNewNeedsATrainerAndFiles(t *testing.T) {
+func TestNewNeedsADomainAndFiles(t *testing.T) {
 	if _, err := New(nil, Options{Static: page}); err == nil {
-		t.Fatal("want an error without a Trainer")
+		t.Fatal("want an error without a Domain")
 	}
 	if _, err := New(&fakeTrainer{}, Options{}); err == nil {
 		t.Fatal("want an error without static files")

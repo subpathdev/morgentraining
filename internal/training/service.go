@@ -265,23 +265,54 @@ func (s *Service) ImportPeople(ctx context.Context, people []PersonImport) error
 	today := s.Today()
 	return s.repo.Atomic(ctx, func(r Repository) error {
 		for _, p := range people {
-			if err := r.SavePerson(ctx, p.Person); err != nil {
+			if err := savePerson(ctx, r, p, today); err != nil {
 				return err
-			}
-			if p.Plan == "" {
-				continue
-			}
-			if ok, err := r.HasPlan(ctx, p.Plan); err != nil {
-				return err
-			} else if !ok {
-				return invalid(fmt.Sprintf("person %s: unknown plan %q", p.Person.Key, p.Plan))
-			}
-			if err := assign(ctx, r, p.Person.Key, p.Plan, today); err != nil {
-				return fmt.Errorf("person %s: %w", p.Person.Key, err)
 			}
 		}
 		return nil
 	})
+}
+
+// SavePerson adds one person or updates them, with the same rules as ImportPeople,
+// and reports whether the person is new.
+func (s *Service) SavePerson(ctx context.Context, p PersonImport) (created bool, err error) {
+	if err := invalid(p.Person.problems()...); err != nil {
+		return false, err
+	}
+	today := s.Today()
+	err = s.repo.Atomic(ctx, func(r Repository) error {
+		_, err := r.Person(ctx, p.Person.Key)
+		switch {
+		case errors.Is(err, ErrNotFound):
+			created = true
+		case err != nil:
+			return err
+		}
+		return savePerson(ctx, r, p, today)
+	})
+	if err != nil {
+		return false, err
+	}
+	return created, nil
+}
+
+// savePerson saves the person and, if a plan is given, has them follow it from today.
+func savePerson(ctx context.Context, r Repository, p PersonImport, today Date) error {
+	if err := r.SavePerson(ctx, p.Person); err != nil {
+		return err
+	}
+	if p.Plan == "" {
+		return nil
+	}
+	if ok, err := r.HasPlan(ctx, p.Plan); err != nil {
+		return err
+	} else if !ok {
+		return invalid(fmt.Sprintf("person %s: unknown plan %q", p.Person.Key, p.Plan))
+	}
+	if err := assign(ctx, r, p.Person.Key, p.Plan, today); err != nil {
+		return fmt.Errorf("person %s: %w", p.Person.Key, err)
+	}
+	return nil
 }
 
 func assign(ctx context.Context, r Repository, personKey, planKey string, today Date) error {

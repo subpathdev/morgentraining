@@ -69,6 +69,22 @@ type Person struct {
 	Name string `json:"name"`
 }
 
+// PersonInput A person as sent to `PUT /api/people/{key}`; the key is in the path.
+type PersonInput struct {
+	// Language Language code for texts, e.g. `de` or `en`. Texts fall back to German, then English.
+	//
+	// Example: en
+	Language string `json:"language"`
+
+	// Name Example: Mariana
+	Name string `json:"name"`
+
+	// Plan Key of an imported plan the person follows from today.
+	//
+	// Example: morgen-5
+	Plan string `json:"plan"`
+}
+
 // RoundInput defines model for RoundInput.
 type RoundInput struct {
 	// Completed True if the round ran to the end (steps may have been skipped).
@@ -164,6 +180,9 @@ type GetTodayParams struct {
 	Date *openapi_types.Date `form:"date,omitempty" json:"date,omitempty"`
 }
 
+// PutPersonJSONRequestBody defines body for PutPerson for application/json ContentType.
+type PutPersonJSONRequestBody = PersonInput
+
 // AddRoundJSONRequestBody defines body for AddRound for application/json ContentType.
 type AddRoundJSONRequestBody = RoundInput
 
@@ -172,6 +191,9 @@ type ServerInterface interface {
 	// ListPeople People to choose from on the start page
 	// (GET /api/people)
 	ListPeople(w http.ResponseWriter, r *http.Request)
+	// PutPerson Add a person, or change their name, language or plan
+	// (PUT /api/people/{key})
+	PutPerson(w http.ResponseWriter, r *http.Request, key PersonKey)
 	// AddRound Record a finished round
 	// (POST /api/people/{key}/rounds)
 	AddRound(w http.ResponseWriter, r *http.Request, key PersonKey)
@@ -197,6 +219,32 @@ func (siw *ServerInterfaceWrapper) ListPeople(w http.ResponseWriter, r *http.Req
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListPeople(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PutPerson operation middleware
+func (siw *ServerInterfaceWrapper) PutPerson(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "key" -------------
+	var key PersonKey
+
+	err = runtime.BindStyledParameterWithOptions("simple", "key", r.PathValue("key"), &key, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "key", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PutPerson(w, r, key)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -410,6 +458,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/healthz", wrapper.GetHealth)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/people", wrapper.ListPeople)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/people/{key}", wrapper.PutPerson)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/people/{key}/today", wrapper.GetToday)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/people/{key}/rounds", wrapper.AddRound)
 
@@ -446,6 +495,71 @@ func (response ListPeople200JSONResponse) VisitListPeopleResponse(w http.Respons
 type ListPeople500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response ListPeople500JSONResponse) VisitListPeopleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := runtime.JSONMarshalWrite(&buf, response.InternalErrorJSONResponse); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutPersonRequestObject struct {
+	Key  PersonKey `json:"key"`
+	Body *PutPersonJSONRequestBody
+}
+
+type PutPersonResponseObject interface {
+	VisitPutPersonResponse(w http.ResponseWriter) error
+}
+
+type PutPerson200JSONResponse Person
+
+func (response PutPerson200JSONResponse) VisitPutPersonResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := runtime.JSONMarshalWrite(&buf, response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutPerson201JSONResponse Person
+
+func (response PutPerson201JSONResponse) VisitPutPersonResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := runtime.JSONMarshalWrite(&buf, response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutPerson400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response PutPerson400JSONResponse) VisitPutPersonResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := runtime.JSONMarshalWrite(&buf, response.BadRequestJSONResponse); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutPerson500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response PutPerson500JSONResponse) VisitPutPersonResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := runtime.JSONMarshalWrite(&buf, response.InternalErrorJSONResponse); err != nil {
@@ -610,6 +724,9 @@ type StrictServerInterface interface {
 	// ListPeople People to choose from on the start page
 	// (GET /api/people)
 	ListPeople(ctx context.Context, request ListPeopleRequestObject) (ListPeopleResponseObject, error)
+	// PutPerson Add a person, or change their name, language or plan
+	// (PUT /api/people/{key})
+	PutPerson(ctx context.Context, request PutPersonRequestObject) (PutPersonResponseObject, error)
 	// AddRound Record a finished round
 	// (POST /api/people/{key}/rounds)
 	AddRound(ctx context.Context, request AddRoundRequestObject) (AddRoundResponseObject, error)
@@ -680,6 +797,39 @@ func (sh *strictHandler) ListPeople(w http.ResponseWriter, r *http.Request) {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListPeopleResponseObject); ok {
 		if err := validResponse.VisitListPeopleResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PutPerson operation middleware
+func (sh *strictHandler) PutPerson(w http.ResponseWriter, r *http.Request, key PersonKey) {
+	var request PutPersonRequestObject
+
+	request.Key = key
+
+	var body PutPersonJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request any) (any, error) {
+		return sh.ssi.PutPerson(ctx, request.(PutPersonRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PutPerson")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PutPersonResponseObject); ok {
+		if err := validResponse.VisitPutPersonResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
