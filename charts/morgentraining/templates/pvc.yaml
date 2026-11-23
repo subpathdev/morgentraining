@@ -1,0 +1,19 @@
+{{- if not .Values.persistence.existingClaim }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "morgentraining.claim" . }}
+  labels:
+    {{- include "morgentraining.labels" . | nindent 4 }}
+  annotations:
+    # The only copy of plans, people and rounds: never deleted with the release.
+    helm.sh/resource-policy: keep
+spec:
+  accessModes: ["ReadWriteOnce"]
+  {{- with .Values.persistence.storageClass }}
+  storageClassName: {{ . }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.persistence.size }}
+{{- end }}

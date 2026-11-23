@@ -1,0 +1,45 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "timeZone": { "type": "string", "minLength": 1 },
+    "persistence": {
+      "type": "object",
+      "properties": {
+        "existingClaim": { "type": "string" },
+        "storageClass": { "type": "string" },
+        "size": { "type": "string", "minLength": 1 }
+      }
+    },
+    "httpRoute": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "parentRefs": { "type": "array" },
+        "hostnames": { "type": "array", "items": { "type": "string" } }
+      },
+      "if": { "properties": { "enabled": { "const": true } } },
+      "then": {
+        "properties": {
+          "parentRefs": { "minItems": 1 },
+          "hostnames": { "minItems": 1 }
+        }
+      }
+    },
+    "backup": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "schedule": { "type": "string", "minLength": 1 }
+      }
+    },
+    "prometheusRule": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "labels": { "type": "object" },
+        "runbookUrl": { "type": "string" }
+      }
+    }
+  }
+}

@@ -1,7 +1,8 @@
 # Tests every PR and push to main. Pushing a version tag (v0.1.0, v0.2.0, ...)
-# also releases: the image ghcr.io/subpathdev/morgentraining:<version without v>
-# is built and pushed, and a GitHub release is created. The smart-home repo
-# deploys that image; Renovate opens the bump PR there.
+# also releases, all with the version without the v: the image
+# ghcr.io/subpathdev/morgentraining:<version>, the Helm chart
+# oci://ghcr.io/subpathdev/charts/morgentraining:<version> and a GitHub release.
+# The smart-home repo deploys the chart; Renovate opens the bump PR there.
 name: ci
 
 on:
@@ -28,10 +29,20 @@ jobs:
       - run: go vet ./...
       - run: go test -race ./...
 
+  chart:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: azure/setup-helm@v5
+        with:
+          version: v4.3.1
+      - run: helm lint charts/morgentraining -f charts/morgentraining/ci-values.yaml
+      - run: helm template test charts/morgentraining -f charts/morgentraining/ci-values.yaml
+
   # Builds without pushing, so a broken Dockerfile shows up in the PR.
   image:
     if: github.event_name == 'pull_request'
-    needs: [test]
+    needs: [test, chart]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -42,7 +53,7 @@ jobs:
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [test]
+    needs: [test, chart]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -71,6 +82,18 @@ jobs:
           labels: |
             org.opencontainers.image.source=https://github.com/subpathdev/morgentraining
             org.opencontainers.image.version=${{ steps.version.outputs.version }}
+      # After the image, so a published chart never points to a missing image.
+      - uses: azure/setup-helm@v5
+        with:
+          version: v4.3.1
+      - name: Publish the chart
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "$GH_TOKEN" | helm registry login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          helm package charts/morgentraining --version "$VERSION" --app-version "$VERSION"
+          helm push "morgentraining-$VERSION.tgz" oci://ghcr.io/subpathdev/charts
       - name: Create the release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

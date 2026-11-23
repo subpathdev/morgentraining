@@ -1,0 +1,44 @@
+{{- if .Values.prometheusRule.enabled }}
+{{- $sel := printf "namespace=%q, deployment=%q" .Release.Namespace .Release.Name }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ .Release.Name }}-alerts
+  labels:
+    {{- include "morgentraining.labels" . | nindent 4 }}
+    {{- with .Values.prometheusRule.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  groups:
+    - name: morgentraining_alerts
+      rules:
+        # Crash loops and failed backup jobs are covered by the usual
+        # KubePodCrashLooping and KubeJobFailed.
+        - alert: MorgentrainingDownWarning
+          expr: max(kube_deployment_status_replicas_available{ {{- $sel -}} }) < 1 or absent(kube_deployment_status_replicas_available{ {{- $sel -}} }) == 1
+          for: 15m
+          labels:
+            severity: warning
+            category: platform
+          annotations:
+            summary: "Morning workout page is down"
+            description: "No ready {{ .Release.Name }} pod for 15 minutes. Rounds done now are kept in the browser and sent when the page is back."
+            {{- with .Values.prometheusRule.runbookUrl }}
+            runbook_url: {{ . | quote }}
+            {{- end }}
+        {{- if .Values.backup.enabled }}
+        - alert: MorgentrainingBackupOldWarning
+          expr: time() - max(kube_job_status_completion_time{namespace={{ .Release.Namespace | quote }}, job_name=~{{ printf "%s-backup-.+" .Release.Name | quote }}}) > 2 * 86400
+          for: 1h
+          labels:
+            severity: warning
+            category: platform
+          annotations:
+            summary: "Morning workout database not backed up for 2 days"
+            description: "The last successful {{ .Release.Name }}-backup job finished over 2 days ago. The volume holds the only copy of plans, people and rounds."
+            {{- with .Values.prometheusRule.runbookUrl }}
+            runbook_url: {{ . | quote }}
+            {{- end }}
+        {{- end }}
+{{- end }}

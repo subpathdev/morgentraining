@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}
+  labels:
+    {{- include "morgentraining.labels" . | nindent 4 }}
+spec:
+  # One SQLite file, one writer: never two pods, not even during a rollout.
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "morgentraining.selector" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "morgentraining.labels" . | nindent 8 }}
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        {{- include "morgentraining.podSecurityContext" . | nindent 8 }}
+      containers:
+        - name: morgentraining
+          image: {{ include "morgentraining.image" . | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          # Seeds the plans and people built into the image when the database is empty.
+          args: ["serve"]
+          env:
+            - name: MT_ADDR
+              value: ":8080"
+            - name: MT_DB
+              value: /data/morgentraining.db
+            - name: MT_TZ
+              value: {{ .Values.timeZone | quote }}
+          ports:
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 30
+          securityContext:
+            {{- include "morgentraining.containerSecurityContext" . | nindent 12 }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            # SQLite's temporary files
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ include "morgentraining.claim" . }}
+        - name: tmp
+          emptyDir: {}
