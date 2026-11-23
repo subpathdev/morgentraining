@@ -2,7 +2,7 @@
 
 A short morning workout timer for the family: a sun ring that fills block by block, with tones, vibration, rests, and the screen kept on. Each person has their own plan and their own streak. One small Go service serves the page and a JSON API and keeps everything in a single SQLite file.
 
-It is meant for a home network. There is **no login**: anyone who can reach the page can pick any person, and anyone who can reach the API can add or change people. Put it behind something that limits access (a LAN-only gateway, later an OIDC proxy).
+It is meant for a home network. There is **no login**: anyone who can reach the page can pick any person, and anyone who can reach the API can add or change people and plans. Put it behind something that limits access (a LAN-only gateway, later an OIDC proxy).
 
 ## Run locally
 
@@ -18,7 +18,7 @@ Open <http://127.0.0.1:8080>. On first start with an empty database, the plans a
 
 A plan is a list of **blocks** (one item in the list and one segment of the ring). Each block has **steps** that point to exercises in a shared library. Exercise kinds: `exercise`, `rest` (a short break inside a block) and `breath` (shows breathe in / breathe out). Names and cues are given per language (`de`, `en`, …), and each person sees their own language, falling back to German, then English.
 
-See [`seed/plan-morgen-5.yaml`](seed/plan-morgen-5.yaml) for the format. To change a plan, edit the YAML and import it:
+See [`seed/plan-morgen-5.yaml`](seed/plan-morgen-5.yaml) for the format. To change a plan, edit the YAML and import it, or use the API (`GET` and `PUT /api/plans/{key}`, the same structure as JSON):
 
 ```bash
 morgentraining import -db morgentraining.db my-plan.yaml   # or: go run ./cmd/morgentraining import …
@@ -73,6 +73,9 @@ go generate ./... && go test ./...
 | :--- | :--- |
 | `GET /api/people` | People to choose from |
 | `PUT /api/people/{key}` | Add a person, or change their name, language or plan |
+| `GET /api/plans` | All plans with their newest version and length |
+| `GET /api/plans/{key}` | The newest version of a plan, in the form it is edited in |
+| `PUT /api/plans/{key}` | Create a plan or save a new version (same rules as the import) |
 | `GET /api/people/{key}/today?date=YYYY-MM-DD` | Today's plan for that person (in their language) and their stats |
 | `POST /api/people/{key}/rounds` | Record a round |
 | `GET /healthz` | Liveness |
@@ -96,18 +99,18 @@ flowchart LR
 
 | Package | What it does |
 | :--- | :--- |
-| [`internal/training`](internal/training) | The domain: people, versioned plans, rounds, streaks. Types such as `Date` and `StepKind`, the rules as plain functions, and `Service` with the use cases. It defines the `Repository` interface it needs and knows nothing about HTTP, YAML or SQL. |
+| [`internal/training`](internal/training) | The domain: people, versioned plans, rounds, streaks. Types such as `Date` and `StepKind`, the rules as plain functions, and `Service` with the use cases. It defines the `Repository` interface it needs (with `PlanCatalog` for reading plans composed in) and knows nothing about HTTP, YAML or SQL. |
 | [`internal/sqlite`](internal/sqlite) | `Open` returns a `sqlite.DB` interface (`training.Repository` plus `Backup` and `Close`); the implementation is unexported. Migrations, transactions, backup. Its own row and column types in `rows.go` define what is stored. |
 | [`internal/planfile`](internal/planfile) | Reads the plan and people YAML files into domain values. Unknown fields are an error. |
 | [`internal/importer`](internal/importer) | Turns plan and people files into service calls, for the `import` command and for seeding an empty database. Depends on a small `PlanStore` interface. |
-| [`internal/httpapi`](internal/httpapi) | HTTP handlers. They depend only on the `Domain` interface (the small `Trainer` and `PeopleEditor` interfaces composed) and map between domain and wire types. |
+| [`internal/httpapi`](internal/httpapi) | HTTP handlers. They depend only on the `Domain` interface (the small `Trainer`, `PeopleEditor` and `PlanEditor` interfaces composed) and map between domain and wire types. |
 | [`internal/httpapi/oapi`](internal/httpapi/oapi) | Generated from the spec. Not edited by hand. |
 | [`cmd/morgentraining`](cmd/morgentraining) | Wiring: an `app` struct holds the parts, and `serve`, `import` and `backup` are its methods. |
 
 Two rules keep the layers independent:
 
 - **Each outer layer owns its types and maps them.** The HTTP JSON types (`oapi`), the YAML documents (`planfile`) and the database rows (`sqlite/rows.go`) are separate types with explicit mapping to and from the domain. The API, the file format and the stored format can each change without touching the domain, and the other way round. The domain types are the shared core and are not copied.
-- **Layers talk through interfaces.** The consumer defines what it needs: `httpapi.Trainer`, `httpapi.PeopleEditor` and `importer.PlanStore` (implemented by `training.Service`) and `training.Repository`. An implementation package can export an interface that embeds those and keep its struct unexported, like `sqlite.DB`, so nothing outside depends on its internals. A new capability gets a new or composed interface rather than growing an existing one.
+- **Layers talk through interfaces.** The consumer defines what it needs: `httpapi.Trainer`, `httpapi.PeopleEditor`, `httpapi.PlanEditor` and `importer.PlanStore` (implemented by `training.Service`) and `training.Repository`. An implementation package can export an interface that embeds those and keep its struct unexported, like `sqlite.DB`, so nothing outside depends on its internals. A new capability gets a new or composed interface rather than growing an existing one.
 
 Tests follow the same split: pure rules are table-tested; handlers and the importer are tested against fakes (with every HTTP response checked against the spec); the stored format is pinned in the SQLite tests; the service is tested against a real SQLite file, and one end-to-end test wires everything together.
 

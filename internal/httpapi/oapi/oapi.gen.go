@@ -17,21 +17,42 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for ExerciseInputKind.
+const (
+	ExerciseInputKindBreath   ExerciseInputKind = "breath"
+	ExerciseInputKindExercise ExerciseInputKind = "exercise"
+	ExerciseInputKindRest     ExerciseInputKind = "rest"
+)
+
+// Valid indicates whether the value is a known member of the ExerciseInputKind enum.
+func (e ExerciseInputKind) Valid() bool {
+	switch e {
+	case ExerciseInputKindBreath:
+		return true
+	case ExerciseInputKindExercise:
+		return true
+	case ExerciseInputKindRest:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for StepKind.
 const (
-	Breath   StepKind = "breath"
-	Exercise StepKind = "exercise"
-	Rest     StepKind = "rest"
+	StepKindBreath   StepKind = "breath"
+	StepKindExercise StepKind = "exercise"
+	StepKindRest     StepKind = "rest"
 )
 
 // Valid indicates whether the value is a known member of the StepKind enum.
 func (e StepKind) Valid() bool {
 	switch e {
-	case Breath:
+	case StepKindBreath:
 		return true
-	case Exercise:
+	case StepKindExercise:
 		return true
-	case Rest:
+	case StepKindRest:
 		return true
 	default:
 		return false
@@ -49,11 +70,50 @@ type Block struct {
 	Summary string `json:"summary"`
 }
 
+// BlockInput One item in the exercise list and one segment of the sun ring.
+type BlockInput struct {
+	// Names One text per language code, e.g. `{"de": "Aufwärmen", "en": "Warm-up"}`.
+	//
+	// Example: {"de":"Aufwärmen","en":"Warm-up"}
+	Names Text        `json:"names"`
+	Steps []StepInput `json:"steps"`
+
+	// Summary One text per language code, e.g. `{"de": "Aufwärmen", "en": "Warm-up"}`.
+	//
+	// Example: {"de":"Aufwärmen","en":"Warm-up"}
+	Summary *Text `json:"summary,omitempty"`
+}
+
 // Error defines model for Error.
 type Error struct {
 	// Error Example: not found
 	Error string `json:"error"`
 }
+
+// ExerciseInput defines model for ExerciseInput.
+type ExerciseInput struct {
+	// Cues One text per language code, e.g. `{"de": "Aufwärmen", "en": "Warm-up"}`.
+	//
+	// Example: {"de":"Aufwärmen","en":"Warm-up"}
+	Cues *Text `json:"cues,omitempty"`
+
+	// Key Example: wall-sit
+	Key string `json:"key"`
+
+	// Kind Defaults to `exercise`.
+	Kind *ExerciseInputKind `json:"kind,omitempty"`
+
+	// Names One text per language code, e.g. `{"de": "Aufwärmen", "en": "Warm-up"}`.
+	//
+	// Example: {"de":"Aufwärmen","en":"Warm-up"}
+	Names Text `json:"names"`
+
+	// Variants Named variants, e.g. `{"knees": {"de": "auf den Knien"}}`.
+	Variants *map[string]Text `json:"variants,omitempty"`
+}
+
+// ExerciseInputKind Defaults to `exercise`.
+type ExerciseInputKind string
 
 // Person defines model for Person.
 type Person struct {
@@ -83,6 +143,66 @@ type PersonInput struct {
 	//
 	// Example: morgen-5
 	Plan string `json:"plan"`
+}
+
+// PlanDetail defines model for PlanDetail.
+type PlanDetail struct {
+	// Key Example: morgen-5
+	Key string `json:"key"`
+
+	// Plan A plan as its author writes it; the same structure as a plan YAML file. The key is in the path.
+	Plan PlanInput `json:"plan"`
+
+	// TotalSeconds Example: 300
+	TotalSeconds int `json:"totalSeconds"`
+	Version      int `json:"version"`
+}
+
+// PlanInput A plan as its author writes it; the same structure as a plan YAML file. The key is in the path.
+type PlanInput struct {
+	Blocks []BlockInput `json:"blocks"`
+
+	// CreatedBy Who made the plan. Only stored when the plan is created.
+	CreatedBy *string `json:"createdBy,omitempty"`
+
+	// Exercises Exercises to add to or update in the shared library.
+	Exercises *[]ExerciseInput `json:"exercises,omitempty"`
+
+	// Names One text per language code, e.g. `{"de": "Aufwärmen", "en": "Warm-up"}`.
+	//
+	// Example: {"de":"Aufwärmen","en":"Warm-up"}
+	Names Text `json:"names"`
+}
+
+// PlanSaved defines model for PlanSaved.
+type PlanSaved struct {
+	// Changed False if the content was the same as the newest version, so nothing was saved.
+	Changed bool `json:"changed"`
+
+	// Key Example: morgen-5
+	Key string `json:"key"`
+
+	// Version The plan's newest version after saving.
+	Version int `json:"version"`
+}
+
+// PlanSummary defines model for PlanSummary.
+type PlanSummary struct {
+	// Key Example: morgen-5
+	Key string `json:"key"`
+
+	// Names One text per language code, e.g. `{"de": "Aufwärmen", "en": "Warm-up"}`.
+	//
+	// Example: {"de":"Aufwärmen","en":"Warm-up"}
+	Names Text `json:"names"`
+
+	// TotalSeconds Sum of all steps of the newest version.
+	//
+	// Example: 300
+	TotalSeconds int `json:"totalSeconds"`
+
+	// Version The newest version.
+	Version int `json:"version"`
 }
 
 // RoundInput defines model for RoundInput.
@@ -162,8 +282,36 @@ type Step struct {
 // StepKind `rest` is a short break inside a block; `breath` shows breathe in / breathe out.
 type StepKind string
 
+// StepInput defines model for StepInput.
+type StepInput struct {
+	// Cues One text per language code, e.g. `{"de": "Aufwärmen", "en": "Warm-up"}`.
+	//
+	// Example: {"de":"Aufwärmen","en":"Warm-up"}
+	Cues *Text `json:"cues,omitempty"`
+
+	// Exercise Key of an exercise in this plan's `exercises` or already in the library.
+	Exercise string `json:"exercise"`
+
+	// Names One text per language code, e.g. `{"de": "Aufwärmen", "en": "Warm-up"}`.
+	//
+	// Example: {"de":"Aufwärmen","en":"Warm-up"}
+	Names   *Text `json:"names,omitempty"`
+	Seconds int   `json:"seconds"`
+
+	// Variant Key of one of the exercise's variants.
+	Variant *string `json:"variant,omitempty"`
+}
+
+// Text One text per language code, e.g. `{"de": "Aufwärmen", "en": "Warm-up"}`.
+//
+// Example: {"de":"Aufwärmen","en":"Warm-up"}
+type Text map[string]string
+
 // PersonKey Example: jan
 type PersonKey = string
+
+// PlanKey Example: morgen-5
+type PlanKey = string
 
 // BadRequest defines model for BadRequest.
 type BadRequest = Error
@@ -186,6 +334,9 @@ type PutPersonJSONRequestBody = PersonInput
 // AddRoundJSONRequestBody defines body for AddRound for application/json ContentType.
 type AddRoundJSONRequestBody = RoundInput
 
+// PutPlanJSONRequestBody defines body for PutPlan for application/json ContentType.
+type PutPlanJSONRequestBody = PlanInput
+
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
 	// ListPeople People to choose from on the start page
@@ -200,6 +351,15 @@ type ServerInterface interface {
 	// GetToday The person's plan for a day, in their language, with their stats
 	// (GET /api/people/{key}/today)
 	GetToday(w http.ResponseWriter, r *http.Request, key PersonKey, params GetTodayParams)
+	// ListPlans All plans, each with its newest version
+	// (GET /api/plans)
+	ListPlans(w http.ResponseWriter, r *http.Request)
+	// GetPlan The newest version of a plan, in the form it is edited in
+	// (GET /api/plans/{key})
+	GetPlan(w http.ResponseWriter, r *http.Request, key PlanKey)
+	// PutPlan Create a plan or save a new version of it
+	// (PUT /api/plans/{key})
+	PutPlan(w http.ResponseWriter, r *http.Request, key PlanKey)
 	// GetHealth Liveness check
 	// (GET /healthz)
 	GetHealth(w http.ResponseWriter, r *http.Request)
@@ -313,6 +473,72 @@ func (siw *ServerInterfaceWrapper) GetToday(w http.ResponseWriter, r *http.Reque
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetToday(w, r, key, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListPlans operation middleware
+func (siw *ServerInterfaceWrapper) ListPlans(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListPlans(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetPlan operation middleware
+func (siw *ServerInterfaceWrapper) GetPlan(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "key" -------------
+	var key PlanKey
+
+	err = runtime.BindStyledParameterWithOptions("simple", "key", r.PathValue("key"), &key, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "key", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetPlan(w, r, key)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PutPlan operation middleware
+func (siw *ServerInterfaceWrapper) PutPlan(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "key" -------------
+	var key PlanKey
+
+	err = runtime.BindStyledParameterWithOptions("simple", "key", r.PathValue("key"), &key, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "key", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PutPlan(w, r, key)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -459,6 +685,9 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/healthz", wrapper.GetHealth)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/people", wrapper.ListPeople)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/people/{key}", wrapper.PutPerson)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/plans", wrapper.ListPlans)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/plans/{key}", wrapper.GetPlan)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/plans/{key}", wrapper.PutPlan)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/people/{key}/today", wrapper.GetToday)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/people/{key}/rounds", wrapper.AddRound)
 
@@ -701,6 +930,156 @@ func (response GetToday500JSONResponse) VisitGetTodayResponse(w http.ResponseWri
 	return err
 }
 
+type ListPlansRequestObject struct {
+}
+
+type ListPlansResponseObject interface {
+	VisitListPlansResponse(w http.ResponseWriter) error
+}
+
+type ListPlans200JSONResponse []PlanSummary
+
+func (response ListPlans200JSONResponse) VisitListPlansResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := runtime.JSONMarshalWrite(&buf, response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListPlans500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response ListPlans500JSONResponse) VisitListPlansResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := runtime.JSONMarshalWrite(&buf, response.InternalErrorJSONResponse); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetPlanRequestObject struct {
+	Key PlanKey `json:"key"`
+}
+
+type GetPlanResponseObject interface {
+	VisitGetPlanResponse(w http.ResponseWriter) error
+}
+
+type GetPlan200JSONResponse PlanDetail
+
+func (response GetPlan200JSONResponse) VisitGetPlanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := runtime.JSONMarshalWrite(&buf, response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetPlan404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetPlan404JSONResponse) VisitGetPlanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := runtime.JSONMarshalWrite(&buf, response.NotFoundJSONResponse); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetPlan500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response GetPlan500JSONResponse) VisitGetPlanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := runtime.JSONMarshalWrite(&buf, response.InternalErrorJSONResponse); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutPlanRequestObject struct {
+	Key  PlanKey `json:"key"`
+	Body *PutPlanJSONRequestBody
+}
+
+type PutPlanResponseObject interface {
+	VisitPutPlanResponse(w http.ResponseWriter) error
+}
+
+type PutPlan200JSONResponse PlanSaved
+
+func (response PutPlan200JSONResponse) VisitPutPlanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := runtime.JSONMarshalWrite(&buf, response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutPlan201JSONResponse PlanSaved
+
+func (response PutPlan201JSONResponse) VisitPutPlanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := runtime.JSONMarshalWrite(&buf, response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutPlan400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response PutPlan400JSONResponse) VisitPutPlanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := runtime.JSONMarshalWrite(&buf, response.BadRequestJSONResponse); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutPlan500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response PutPlan500JSONResponse) VisitPutPlanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := runtime.JSONMarshalWrite(&buf, response.InternalErrorJSONResponse); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetHealthRequestObject struct {
 }
 
@@ -733,6 +1112,15 @@ type StrictServerInterface interface {
 	// GetToday The person's plan for a day, in their language, with their stats
 	// (GET /api/people/{key}/today)
 	GetToday(ctx context.Context, request GetTodayRequestObject) (GetTodayResponseObject, error)
+	// ListPlans All plans, each with its newest version
+	// (GET /api/plans)
+	ListPlans(ctx context.Context, request ListPlansRequestObject) (ListPlansResponseObject, error)
+	// GetPlan The newest version of a plan, in the form it is edited in
+	// (GET /api/plans/{key})
+	GetPlan(ctx context.Context, request GetPlanRequestObject) (GetPlanResponseObject, error)
+	// PutPlan Create a plan or save a new version of it
+	// (PUT /api/plans/{key})
+	PutPlan(ctx context.Context, request PutPlanRequestObject) (PutPlanResponseObject, error)
 	// GetHealth Liveness check
 	// (GET /healthz)
 	GetHealth(ctx context.Context, request GetHealthRequestObject) (GetHealthResponseObject, error)
@@ -890,6 +1278,89 @@ func (sh *strictHandler) GetToday(w http.ResponseWriter, r *http.Request, key Pe
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetTodayResponseObject); ok {
 		if err := validResponse.VisitGetTodayResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListPlans operation middleware
+func (sh *strictHandler) ListPlans(w http.ResponseWriter, r *http.Request) {
+	var request ListPlansRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request any) (any, error) {
+		return sh.ssi.ListPlans(ctx, request.(ListPlansRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListPlans")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListPlansResponseObject); ok {
+		if err := validResponse.VisitListPlansResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetPlan operation middleware
+func (sh *strictHandler) GetPlan(w http.ResponseWriter, r *http.Request, key PlanKey) {
+	var request GetPlanRequestObject
+
+	request.Key = key
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request any) (any, error) {
+		return sh.ssi.GetPlan(ctx, request.(GetPlanRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetPlan")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetPlanResponseObject); ok {
+		if err := validResponse.VisitGetPlanResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PutPlan operation middleware
+func (sh *strictHandler) PutPlan(w http.ResponseWriter, r *http.Request, key PlanKey) {
+	var request PutPlanRequestObject
+
+	request.Key = key
+
+	var body PutPlanJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request any) (any, error) {
+		return sh.ssi.PutPlan(ctx, request.(PutPlanRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PutPlan")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PutPlanResponseObject); ok {
+		if err := validResponse.VisitPutPlanResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

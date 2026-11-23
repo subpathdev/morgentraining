@@ -88,6 +88,28 @@ func TestEndToEnd(t *testing.T) {
 		t.Fatalf("new person's plan: %+v", m)
 	}
 
+	// A plan read through the API and saved back unchanged is no new version;
+	// a changed step is, and the page gets it at once.
+	var detail struct {
+		Version int             `json:"version"`
+		Plan    json.RawMessage `json:"plan"`
+	}
+	get(t, srv.URL+"/api/plans/morgen-5", &detail)
+	if detail.Version != 1 {
+		t.Fatalf("seeded plan version: %d", detail.Version)
+	}
+	if code, saved := putJSON(t, srv.URL+"/api/plans/morgen-5", string(detail.Plan)); code != 200 || saved["changed"] != false || saved["version"] != 1.0 {
+		t.Fatalf("saving the plan back unchanged: %d %v", code, saved)
+	}
+	longer := strings.Replace(string(detail.Plan), `"seconds":60`, `"seconds":90`, 1)
+	if code, saved := putJSON(t, srv.URL+"/api/plans/morgen-5", longer); code != 200 || saved["changed"] != true || saved["version"] != 2.0 {
+		t.Fatalf("saving a changed plan: %d %v", code, saved)
+	}
+	get(t, srv.URL+"/api/people/jan/today", &sess)
+	if sess.Plan.TotalSeconds != 330 {
+		t.Fatalf("after the change: %+v", sess.Plan)
+	}
+
 	page, err := http.Get(srv.URL + "/")
 	if err != nil {
 		t.Fatal(err)
@@ -97,6 +119,23 @@ func TestEndToEnd(t *testing.T) {
 	if !bytes.Contains(b, []byte("sunbox")) || bytes.Contains(b, []byte("googleapis")) {
 		t.Fatal("the page must be served and load nothing from outside the home network")
 	}
+}
+
+func putJSON(t *testing.T, url, body string) (int, map[string]any) {
+	t.Helper()
+	req, err := http.NewRequest("PUT", url, strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	var out map[string]any
+	json.NewDecoder(resp.Body).Decode(&out)
+	return resp.StatusCode, out
 }
 
 func get(t *testing.T, url string, v any) {

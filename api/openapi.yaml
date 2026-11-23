@@ -1,22 +1,24 @@
 openapi: 3.0.3
 info:
   title: Morgentraining API
-  version: 1.1.0
+  version: 1.2.0
   description: |
-    API behind the Morgentraining page: people, their plan for today, and finished rounds.
+    API behind the Morgentraining page: people, their plan for today, finished rounds, and
+    the plans themselves.
 
     There is no authentication. The service is meant for a home network behind a gateway
     that limits access (later an OIDC proxy that tells the service who is signed in).
-    Anyone who can reach the API can add or change people, just as they can record rounds.
+    Anyone who can reach the API can add or change people and plans, just as they can record rounds.
 
     Plans are versioned. A saved plan version never changes, and every round points to the
-    version it used. Plans are changed with the `morgentraining import` command; people can
-    also be added or changed through this API.
+    version it used. Plans and people are changed through this API or with the
+    `morgentraining import` command; both follow the same rules.
 servers:
   - url: /
 tags:
   - name: people
   - name: rounds
+  - name: plans
   - name: ops
 
 paths:
@@ -81,6 +83,80 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Person"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/plans:
+    get:
+      operationId: listPlans
+      tags: [plans]
+      summary: All plans, each with its newest version
+      responses:
+        "200":
+          description: Plans ordered by key.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PlanSummary"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/plans/{key}:
+    parameters:
+      - $ref: "#/components/parameters/PlanKey"
+    get:
+      operationId: getPlan
+      tags: [plans]
+      summary: The newest version of a plan, in the form it is edited in
+      description: |
+        `plan` has the same structure as a plan YAML file and as the body of `PUT`, with all
+        languages. Its `exercises` are the library entries the plan uses, so a client can
+        change the plan and send `plan` back.
+      responses:
+        "200":
+          description: The plan.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlanDetail"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    put:
+      operationId: putPlan
+      tags: [plans]
+      summary: Create a plan or save a new version of it
+      description: |
+        Works like importing a plan file. Content that differs from the newest version is saved
+        as a new version (saved versions never change, and rounds keep pointing to theirs);
+        unchanged content saves nothing. The `exercises` are added to or update the exercise
+        library shared by all plans; steps may also use exercises already in the library.
+        An invalid plan is rejected with all its problems at once, and nothing is saved.
+        People following the plan get the new version on their next load.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlanInput"
+      responses:
+        "200":
+          description: The plan existed. `changed` says whether a new version was saved.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlanSaved"
+        "201":
+          description: The plan was created as version 1.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlanSaved"
         "400":
           $ref: "#/components/responses/BadRequest"
         "500":
@@ -160,6 +236,16 @@ components:
         type: string
         pattern: "^[a-z0-9_-]{1,64}$"
         example: jan
+
+    PlanKey:
+      name: key
+      in: path
+      required: true
+      description: The plan's key, e.g. `morgen-5`.
+      schema:
+        type: string
+        pattern: "^[a-z0-9_-]{1,64}$"
+        example: morgen-5
 
   responses:
     BadRequest:
@@ -326,6 +412,147 @@ components:
           pattern: "^[a-z0-9_-]{1,64}$"
           description: Key of an imported plan the person follows from today.
           example: morgen-5
+
+    Text:
+      type: object
+      description: 'One text per language code, e.g. `{"de": "Aufwärmen", "en": "Warm-up"}`.'
+      additionalProperties:
+        type: string
+      example: {de: Aufwärmen, en: Warm-up}
+
+    PlanSummary:
+      type: object
+      required: [key, names, version, totalSeconds]
+      additionalProperties: false
+      properties:
+        key:
+          type: string
+          example: morgen-5
+        names:
+          $ref: "#/components/schemas/Text"
+        version:
+          type: integer
+          minimum: 1
+          description: The newest version.
+        totalSeconds:
+          type: integer
+          description: Sum of all steps of the newest version.
+          example: 300
+
+    PlanDetail:
+      type: object
+      required: [key, version, totalSeconds, plan]
+      additionalProperties: false
+      properties:
+        key:
+          type: string
+          example: morgen-5
+        version:
+          type: integer
+          minimum: 1
+        totalSeconds:
+          type: integer
+          example: 300
+        plan:
+          $ref: "#/components/schemas/PlanInput"
+
+    PlanInput:
+      type: object
+      description: A plan as its author writes it; the same structure as a plan YAML file. The key is in the path.
+      required: [names, blocks]
+      additionalProperties: false
+      properties:
+        names:
+          $ref: "#/components/schemas/Text"
+        createdBy:
+          type: string
+          description: Who made the plan. Only stored when the plan is created.
+        exercises:
+          type: array
+          description: Exercises to add to or update in the shared library.
+          items:
+            $ref: "#/components/schemas/ExerciseInput"
+        blocks:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/BlockInput"
+
+    ExerciseInput:
+      type: object
+      required: [key, names]
+      additionalProperties: false
+      properties:
+        key:
+          type: string
+          pattern: "^[a-z0-9_-]{1,64}$"
+          example: wall-sit
+        kind:
+          type: string
+          enum: [exercise, rest, breath]
+          description: Defaults to `exercise`.
+        names:
+          $ref: "#/components/schemas/Text"
+        cues:
+          $ref: "#/components/schemas/Text"
+        variants:
+          type: object
+          description: 'Named variants, e.g. `{"knees": {"de": "auf den Knien"}}`.'
+          additionalProperties:
+            $ref: "#/components/schemas/Text"
+
+    BlockInput:
+      type: object
+      description: One item in the exercise list and one segment of the sun ring.
+      required: [names, steps]
+      additionalProperties: false
+      properties:
+        names:
+          $ref: "#/components/schemas/Text"
+        summary:
+          $ref: "#/components/schemas/Text"
+        steps:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/StepInput"
+
+    StepInput:
+      type: object
+      required: [exercise, seconds]
+      additionalProperties: false
+      properties:
+        exercise:
+          type: string
+          pattern: "^[a-z0-9_-]{1,64}$"
+          description: Key of an exercise in this plan's `exercises` or already in the library.
+        seconds:
+          type: integer
+          minimum: 1
+          maximum: 3600
+        variant:
+          type: string
+          description: Key of one of the exercise's variants.
+        names:
+          $ref: "#/components/schemas/Text"
+        cues:
+          $ref: "#/components/schemas/Text"
+
+    PlanSaved:
+      type: object
+      required: [key, version, changed]
+      additionalProperties: false
+      properties:
+        key:
+          type: string
+          example: morgen-5
+        version:
+          type: integer
+          minimum: 1
+          description: The plan's newest version after saving.
+        changed:
+          type: boolean
+          description: False if the content was the same as the newest version, so nothing was saved.
 
     RoundInput:
       type: object

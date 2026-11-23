@@ -47,6 +47,12 @@ func TestMissingRowsAreNotFound(t *testing.T) {
 	if _, err := db.AssignedVersion(ctx, "nobody", training.NewDate(2026, 11, 22)); !errors.Is(err, training.ErrNotFound) {
 		t.Fatalf("assigned version: %v", err)
 	}
+	if _, err := db.CurrentVersion(ctx, "none"); !errors.Is(err, training.ErrNotFound) {
+		t.Fatalf("current version: %v", err)
+	}
+	if plans, err := db.CurrentVersions(ctx); err != nil || len(plans) != 0 {
+		t.Fatalf("current versions of an empty database: %+v %v", plans, err)
+	}
 }
 
 func TestAtomicRollsBackOnError(t *testing.T) {

@@ -30,6 +30,9 @@ type fakeTrainer struct {
 	err     error
 
 	created bool
+	plans   []training.PlanVersion
+	saved   training.PlanResult
+	gotPlan training.PlanImport
 
 	gotKey    string
 	gotDay    training.Date
@@ -54,6 +57,41 @@ func (f *fakeTrainer) RecordRound(_ context.Context, key string, in training.Rou
 func (f *fakeTrainer) SavePerson(_ context.Context, p training.PersonImport) (bool, error) {
 	f.gotKey, f.gotPerson = p.Person.Key, p
 	return f.created, f.err
+}
+
+func (f *fakeTrainer) Plans(context.Context) ([]training.PlanVersion, error) { return f.plans, f.err }
+
+func (f *fakeTrainer) Plan(_ context.Context, key string) (training.PlanVersion, error) {
+	f.gotKey = key
+	if f.err != nil {
+		return training.PlanVersion{}, f.err
+	}
+	return f.plans[0], nil
+}
+
+func (f *fakeTrainer) ImportPlan(_ context.Context, imp training.PlanImport) (training.PlanResult, error) {
+	f.gotKey, f.gotPlan = imp.Plan.Key, imp
+	return f.saved, f.err
+}
+
+// samplePlan has a block with an exercise, an in-block rest, a step with its own name, and a variant.
+func samplePlan() training.PlanVersion {
+	return training.PlanVersion{
+		ID: 9, PlanKey: "morgen-5", Version: 2, Names: training.Text{"de": "5 Minuten morgens"},
+		Blocks: []training.BlockSpec{
+			{Names: training.Text{"de": "Wandsitzen"}, Summaries: training.Text{"de": "2 × 25 s"}, Steps: []training.StepSpec{
+				{Exercise: "wall-sit", Seconds: 25, Names: training.Text{"de": "Wandsitzen 1 von 2"}},
+				{Exercise: "short-break", Seconds: 10},
+				{Exercise: "wall-sit", Seconds: 25},
+			}},
+			{Names: training.Text{"de": "Liegestütze"}, Steps: []training.StepSpec{{Exercise: "push-up", Seconds: 60, Variant: "knees"}}},
+		},
+		Exercises: map[string]training.Exercise{
+			"wall-sit":    {Key: "wall-sit", Kind: training.KindExercise, Names: training.Text{"de": "Wandsitzen"}, Cues: training.Text{"de": "Rücken an die Wand"}},
+			"short-break": {Key: "short-break", Kind: training.KindRest, Names: training.Text{"de": "Kurze Pause"}},
+			"push-up":     {Key: "push-up", Kind: training.KindExercise, Names: training.Text{"de": "Liegestütze"}, Variants: map[string]training.Text{"knees": {"de": "auf den Knien"}}},
+		},
+	}
 }
 
 var page = fstest.MapFS{"index.html": {Data: []byte("<!doctype html><div id=sunbox></div>")}}
@@ -162,7 +200,7 @@ func TestTodayMapsTheSession(t *testing.T) {
 	if fake.gotKey != "jan" || fake.gotDay != fake.today {
 		t.Fatalf("without a date the service's today must be used, got %s %s", fake.gotKey, fake.gotDay)
 	}
-	if got.Plan.VersionId != 9 || got.Blocks[0].Steps[1].Kind != oapi.Rest || got.Blocks[0].Steps[1].Cue != "Beine ausschütteln" || got.Stats.Streak != 3 {
+	if got.Plan.VersionId != 9 || got.Blocks[0].Steps[1].Kind != oapi.StepKindRest || got.Blocks[0].Steps[1].Cue != "Beine ausschütteln" || got.Stats.Streak != 3 {
 		t.Fatalf("session: %+v", got)
 	}
 
@@ -212,9 +250,75 @@ func TestPutPersonMapsTheInput(t *testing.T) {
 	}
 }
 
+func TestListPlans(t *testing.T) {
+	fake := &fakeTrainer{plans: []training.PlanVersion{samplePlan()}}
+	var got []oapi.PlanSummary
+	call(t, "GET", server(t, fake).URL+"/api/plans", "", 200, &got)
+	if len(got) != 1 || got[0].Key != "morgen-5" || got[0].Version != 2 || got[0].TotalSeconds != 120 || got[0].Names["de"] != "5 Minuten morgens" {
+		t.Fatalf("plans: %+v", got)
+	}
+}
+
+func TestGetPlanReturnsTheEditableForm(t *testing.T) {
+	fake := &fakeTrainer{plans: []training.PlanVersion{samplePlan()}}
+	var got oapi.PlanDetail
+	call(t, "GET", server(t, fake).URL+"/api/plans/morgen-5", "", 200, &got)
+	if fake.gotKey != "morgen-5" || got.Version != 2 || got.TotalSeconds != 120 {
+		t.Fatalf("detail: key %s %+v", fake.gotKey, got)
+	}
+	ex := *got.Plan.Exercises
+	if len(ex) != 3 || ex[0].Key != "wall-sit" || ex[1].Key != "short-break" || ex[2].Key != "push-up" {
+		t.Fatalf("exercises must be listed once, in order of first use: %+v", ex)
+	}
+	if *ex[1].Kind != oapi.ExerciseInputKindRest || (*ex[2].Variants)["knees"]["de"] != "auf den Knien" || ex[1].Cues != nil {
+		t.Fatalf("exercise details: %+v", ex)
+	}
+	b := got.Plan.Blocks
+	if (*b[0].Summary)["de"] != "2 × 25 s" || b[1].Summary != nil {
+		t.Fatalf("summaries: only what the author wrote, got %+v", b)
+	}
+	s := b[0].Steps
+	if (*s[0].Names)["de"] != "Wandsitzen 1 von 2" || s[1].Names != nil || s[1].Variant != nil || *b[1].Steps[0].Variant != "knees" {
+		t.Fatalf("steps: only what the author wrote, got %+v", s)
+	}
+}
+
+func TestPutPlanMapsTheInput(t *testing.T) {
+	body := `{"names":{"de":"Kurz"},"createdBy":"jan",
+		"exercises":[{"key":"plank","names":{"de":"Unterarmstütz"}},{"key":"pause","kind":"rest","names":{"de":"Pause"},"variants":{"long":{"de":"lang"}}}],
+		"blocks":[{"names":{"de":"Halten"},"steps":[{"exercise":"plank","seconds":30,"cues":{"de":"Atmen"}},{"exercise":"pause","seconds":10,"variant":"long"}]}]}`
+	for _, c := range []struct {
+		saved training.PlanResult
+		code  int
+	}{
+		{training.PlanResult{PlanKey: "kurz", Version: 1, Created: true}, 201},
+		{training.PlanResult{PlanKey: "kurz", Version: 3, Created: true}, 200},
+		{training.PlanResult{PlanKey: "kurz", Version: 3, Created: false}, 200},
+	} {
+		fake := &fakeTrainer{saved: c.saved}
+		var got oapi.PlanSaved
+		call(t, "PUT", server(t, fake).URL+"/api/plans/kurz", body, c.code, &got)
+		if got != (oapi.PlanSaved{Key: "kurz", Version: c.saved.Version, Changed: c.saved.Created}) {
+			t.Fatalf("response: %+v", got)
+		}
+		p := fake.gotPlan
+		if p.Plan.Key != "kurz" || p.Plan.CreatedBy != "jan" || p.Plan.Names["de"] != "Kurz" || len(p.Exercises) != 2 {
+			t.Fatalf("plan passed to the service: %+v", p)
+		}
+		if p.Exercises[0].Kind != training.KindExercise || p.Exercises[1].Kind != training.KindRest || p.Exercises[1].Variants["long"]["de"] != "lang" {
+			t.Fatalf("exercises (kind defaults to exercise): %+v", p.Exercises)
+		}
+		st := p.Plan.Blocks[0].Steps
+		if st[0].Cues["de"] != "Atmen" || st[0].Names != nil || st[1].Variant != "long" || st[1].Seconds != 10 {
+			t.Fatalf("steps: %+v", st)
+		}
+	}
+}
+
 func TestDomainErrorsBecomeStatusCodes(t *testing.T) {
 	round := `{"planVersionId":1,"date":"2026-11-22","completed":true}`
 	person := `{"name":"X","language":"de","plan":"nope"}`
+	plan := `{"names":{"de":"X"},"blocks":[{"names":{"de":"B"},"steps":[{"exercise":"nope","seconds":10}]}]}`
 	cases := []struct {
 		name         string
 		err          error
@@ -230,6 +334,11 @@ func TestDomainErrorsBecomeStatusCodes(t *testing.T) {
 		{"storage failure on list", errors.New("disk on fire"), "GET", "/api/people", "", 500, "internal error"},
 		{"unknown plan for person", &training.ValidationError{Problems: []string{`person x: unknown plan "nope"`}}, "PUT", "/api/people/x", person, 400, `unknown plan "nope"`},
 		{"storage failure on save", errors.New("disk on fire"), "PUT", "/api/people/x", person, 500, "internal error"},
+		{"unknown plan", fmt.Errorf("plan x: %w", training.ErrNotFound), "GET", "/api/plans/x", "", 404, "plan x: not found"},
+		{"storage failure on plan", errors.New("disk on fire"), "GET", "/api/plans/x", "", 500, "internal error"},
+		{"storage failure on plans", errors.New("disk on fire"), "GET", "/api/plans", "", 500, "internal error"},
+		{"invalid plan", &training.ValidationError{Problems: []string{`block 1 step 1: unknown exercise "nope"`, "plan needs a name"}}, "PUT", "/api/plans/x", plan, 400, `unknown exercise "nope"; plan needs a name`},
+		{"storage failure on plan save", errors.New("disk on fire"), "PUT", "/api/plans/x", plan, 500, "internal error"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -260,6 +369,12 @@ func TestRequestsAreValidatedAgainstSpec(t *testing.T) {
 		{"person with bad language", "PUT", "/api/people/mariana", `{"name":"Mariana","language":"English","plan":"morgen-5"}`, 400},
 		{"person with unknown field", "PUT", "/api/people/mariana", `{"name":"Mariana","language":"en","plan":"morgen-5","admin":true}`, 400},
 		{"person with bad key", "PUT", "/api/people/Mariana", `{"name":"Mariana","language":"en","plan":"morgen-5"}`, 400},
+		{"plan without blocks", "PUT", "/api/plans/x", `{"names":{"de":"X"},"blocks":[]}`, 400},
+		{"plan step of 0 seconds", "PUT", "/api/plans/x", `{"names":{"de":"X"},"blocks":[{"names":{"de":"B"},"steps":[{"exercise":"a","seconds":0}]}]}`, 400},
+		{"plan with unknown field", "PUT", "/api/plans/x", `{"names":{"de":"X"},"blocks":[{"names":{"de":"B"},"steps":[{"exercise":"a","seconds":5}]}],"plan":"x"}`, 400},
+		{"plan with bad exercise kind", "PUT", "/api/plans/x", `{"names":{"de":"X"},"exercises":[{"key":"a","kind":"nap","names":{"de":"A"}}],"blocks":[{"names":{"de":"B"},"steps":[{"exercise":"a","seconds":5}]}]}`, 400},
+		{"plan with bad key", "PUT", "/api/plans/Morgen", `{"names":{"de":"X"},"blocks":[{"names":{"de":"B"},"steps":[{"exercise":"a","seconds":5}]}]}`, 400},
+		{"text that isn't a string", "PUT", "/api/plans/x", `{"names":{"de":1},"blocks":[{"names":{"de":"B"},"steps":[{"exercise":"a","seconds":5}]}]}`, 400},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
