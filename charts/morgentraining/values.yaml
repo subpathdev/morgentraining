@@ -40,7 +40,7 @@ backup:
   # Moves the copy to its weekday name. The app image has no shell.
   rotateImage:
     repository: busybox
-    tag: 1.37.0
+    tag: 1.38.0
 
 # Alerts for the Prometheus Operator: page down for 15 min, last backup over 2 days
 # old. They use kube-state-metrics; the app has no /metrics.
