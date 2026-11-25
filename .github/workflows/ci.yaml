@@ -37,7 +37,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: azure/setup-helm@v5
         with:
-          version: v4.3.1
+          version: v4.3.2
       - run: helm lint charts/morgentraining -f charts/morgentraining/ci-values.yaml
       - run: helm template test charts/morgentraining -f charts/morgentraining/ci-values.yaml
 
@@ -128,7 +128,7 @@ jobs:
       - uses: azure/setup-helm@v5
         if: steps.next.outputs.tag != ''
         with:
-          version: v4.3.1
+          version: v4.3.2
       - name: Publish the chart
         if: steps.next.outputs.tag != ''
         env:
